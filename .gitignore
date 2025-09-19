@@ -1,0 +1,6 @@
+.env
+settings.py
+__pycache__/
+
+media/
+uploads/
