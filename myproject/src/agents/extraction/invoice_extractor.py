@@ -42,7 +42,7 @@ class PDFExtractorAgent:
         
         2. FATURADO (cliente/destinatário):
            - Nome Completo: nome da pessoa ou empresa
-           - CPF: número do CPF ou CNPJ se for empresa
+           - CPF/CNPJ: número do CPF ou CNPJ se for empresa
         
         3. NÚMERO DA NOTA FISCAL: número do documento fiscal
         
@@ -73,7 +73,7 @@ class PDFExtractorAgent:
             },
             "faturado": {
                 "nome_completo": "string",
-                "cpf": "string"
+                "cpf_cnpj": "string"
             },
             "numero_nota_fiscal": "string",
             "data_emissao": "string",
