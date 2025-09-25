@@ -6,6 +6,16 @@
     <title>Upload de PDF</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'upload/upload.css' %}">
+    <style>
+        .json-result {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
 </head>
 <body>    
     {% if messages %}
@@ -26,5 +36,9 @@
             <button type="submit" class="btn-submit">Enviar</button>
         </form>
     </div>
+
+    {% if json_result %}
+        <div class="json-result">{{ json_result|striptags }}</div>
+    {% endif %}
 </body>
 </html>

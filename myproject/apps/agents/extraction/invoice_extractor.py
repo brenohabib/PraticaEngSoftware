@@ -49,12 +49,14 @@ class PDFExtractorAgent:
         4. DATA DE EMISSÃO: data em que a nota foi emitida (formato: DD/MM/AAAA)
         
         5. DESCRIÇÃO DOS PRODUTOS: lista com descrição de cada item/produto/serviço
+
+        6. CLASIFICAÇÃO DE DESPESA: lista com categorias de despesa
         
-        6. QUANTIDADE DE PARCELAS: número de parcelas (se à vista, considere 1)
+        7. QUANTIDADE DE PARCELAS: número de parcelas (se à vista, considere 1)
         
-        7. DATA DE VENCIMENTO: data de vencimento da nota ou primeira parcela (formato: DD/MM/AAAA)
+        8. DATA DE VENCIMENTO: data de vencimento da nota ou primeira parcela (formato: DD/MM/AAAA)
         
-        8. VALOR TOTAL: valor total da nota fiscal
+        9. VALOR TOTAL: valor total da nota fiscal
         
         IMPORTANTE:
         - Retorne APENAS o JSON, sem explicações adicionais
@@ -78,10 +80,31 @@ class PDFExtractorAgent:
             "numero_nota_fiscal": "string",
             "data_emissao": "string",
             "descricao_produtos": ["string"],
+            "classificacao_despesa": ["string"],
             "quantidade_parcelas": número,
             "data_vencimento": "string",
             "valor_total": número
         }
+
+        Sobre o Item 6 CLASSIFICAÇÃO DE DESPESA deve ser considerado o seguinte critério:
+            Analise CADA ITEM na "descricao_produtos" associe cada um à sua categoria de despesa correspondente.
+
+            CATEGORIAS VÁLIDAS:
+            - INSUMOS AGRÍCOLAS (Ex: Sementes, Fertilizantes, Defensivos Agrícolas, Corretivos)
+            - MANUTENÇÃO E OPERAÇÃO (Ex: Combustíveis, Lubrificantes, Peças, Parafusos, Pneus, Filtros, Ferramentas, Manutenção de Máquinas)
+            - RECURSOS HUMANOS (Ex: Mão de Obra Temporária, Salários)
+            - SERVIÇOS OPERACIONAIS (Ex: Frete, Transporte, Colheita Terceirizada, Secagem, Armazenagem, Pulverização)
+            - INFRAESTRUTURA E UTILIDADES (Ex: Energia Elétrica, Arrendamento de Terras, Materiais de Construção, Reformas)
+            - ADMINISTRATIVAS (Ex: Honorários Contábeis, Advocatícios, Agronômicos, Despesas Bancárias)
+            - SEGUROS E PROTEÇÃO (Ex: Seguro Agrícola, Seguro de Máquinas/Veículos)
+            - IMPOSTOS E TAXAS (Ex: ITR, IPTU, IPVA, INCRA-CCIR)
+            - INVESTIMENTOS (Ex: Aquisição de Máquinas, Veículos, Imóveis, Infraestrutura Rural)
+            - OUTRAS DESPESAS (Use esta categoria se nenhum item se encaixar claramente nas outras)
+        IMPORTANTE:
+            - A sua resposta deve ser APENAS um objeto JSON válido.
+            - O JSON de resposta deve ter a seguinte estrutura: {{"classificacoes": ["CATEGORIA_1", "CATEGORIA_2", ...]}}
+            - Não inclua explicações ou texto fora do JSON.
+            - A lista de classificações não deve conter valores duplicados.
         """
 
     def _clean_json_response(self, response_text):
@@ -174,8 +197,3 @@ class PDFExtractorAgent:
                     logger.info("Arquivo temporário removido com sucesso.")
                 except Exception as e:
                     logger.warning(f"Não foi possível remover o arquivo temporário: {str(e)}")
-
-if __name__ == "__main__":
-    agent = PDFExtractorAgent()
-    result = agent.extract_pdf_to_json("C:\\Users\\BrenoHabib.DESKTOP-0I3JBOF\\Documentos\\Estudos\\Códigos\\PraticaEngSoftware\\media\\danfe.pdf")
-    print(json.dumps(result, indent=2, ensure_ascii=False))
