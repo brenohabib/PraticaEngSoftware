@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'myproject.apps.upload',
+    'myproject.apps.models',
 ]
 
 MIDDLEWARE = [
@@ -43,7 +44,7 @@ ROOT_URLCONF = 'myproject.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'myproject/apps/templates'],
+        'DIRS': [BASE_DIR / 'myproject/templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -94,7 +95,7 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
-    BASE_DIR / 'myproject/apps/static',
+    BASE_DIR / 'myproject/static',
 ]
 
 # Media files
@@ -106,6 +107,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]

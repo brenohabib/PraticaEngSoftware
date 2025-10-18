@@ -1,8 +1,6 @@
 from django.shortcuts import render
-from django.http import HttpResponseRedirect
-from django.urls import reverse
 from django.contrib import messages
-from ..agents.extraction.invoice_extractor import PDFExtractorAgent
+from ...agents.extraction.invoice_extractor import PDFExtractorAgent
 import json
 import os
 from django.conf import settings
@@ -11,7 +9,7 @@ def upload_pdf(request):
     context = {}
     if request.method == 'POST' and request.FILES.get('pdf_file'):
         pdf_file = request.FILES['pdf_file']
-        
+
         # Salva o arquivo temporariamente
         temp_path = os.path.join(settings.MEDIA_ROOT, pdf_file.name)
         with open(temp_path, 'wb+') as destination:
@@ -26,7 +24,6 @@ def upload_pdf(request):
             # Converte o resultado para JSON formatado
             context['json_result'] = json.dumps(extracted_data, indent=2, ensure_ascii=False)
             messages.success(request, f'Arquivo "{pdf_file.name}" processado com sucesso!')
-            
         except Exception as e:
             messages.error(request, f'Erro ao processar o arquivo: {str(e)}')
         finally:
