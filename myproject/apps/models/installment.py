@@ -16,7 +16,7 @@ class Installment(models.Model):
     status_parcela = models.CharField(max_length=45, default='aberta')
 
     def __str__(self):
-        return f"Parcela {self.identificacao} de {self.movimento_conta.descricao}"
+        return f"Parcela {self.identificacao} de {self.account_transaction.descricao}"
 
     class Meta:
         verbose_name = "Installment"

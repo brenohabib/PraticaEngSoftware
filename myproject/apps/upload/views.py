@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.contrib import messages
 from ...agents.extraction.invoice_extractor import PDFExtractorAgent
+from ..models.services import process_extracted_invoice
 import json
 import os
 from django.conf import settings
@@ -20,7 +21,22 @@ def upload_pdf(request):
             # Extrai dados do PDF
             extractor_agent = PDFExtractorAgent()
             extracted_data = extractor_agent.extract_pdf_to_json(temp_path)
-            
+
+            # Valida e salva dados no banco de dados
+            result = process_extracted_invoice(extracted_data)
+
+            # === 3. Mostra o relatório de verificação ===
+            for line in result.get("mensagens", []):
+                messages.info(request, line)
+
+            if result.get("success"):
+                messages.success(request, f"✅ Registro criado com sucesso! "
+                                          f"Nota: {result['numero_nota_fiscal']} | "
+                                          f"Fornecedor: {result['fornecedor']} | "
+                                          f"Valor Total: R$ {result['valor_total']:.2f}")
+            else:
+                messages.error(request, f"Erro ao salvar: {result.get('error')}")
+
             # Converte o resultado para JSON formatado
             context['json_result'] = json.dumps(extracted_data, indent=2, ensure_ascii=False)
             messages.success(request, f'Arquivo "{pdf_file.name}" processado com sucesso!')
