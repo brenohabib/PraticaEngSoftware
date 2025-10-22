@@ -11,7 +11,7 @@ def upload_pdf(request):
     if request.method == 'POST' and request.FILES.get('pdf_file'):
         pdf_file = request.FILES['pdf_file']
 
-        # Salva o arquivo temporariamente
+        os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
         temp_path = os.path.join(settings.MEDIA_ROOT, pdf_file.name)
         with open(temp_path, 'wb+') as destination:
             for chunk in pdf_file.chunks():
