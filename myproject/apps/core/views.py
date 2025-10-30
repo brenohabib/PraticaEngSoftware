@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.contrib import messages
 from ...agents.extraction.invoice_extractor import PDFExtractorAgent
-from ..models.services import process_extracted_invoice
+from .services import process_extracted_invoice
 import json
 import os
 from django.conf import settings

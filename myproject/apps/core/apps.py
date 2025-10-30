@@ -1,5 +1,5 @@
 from django.apps import AppConfig
 
-class ModelsConfig(AppConfig):
+class HomeConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'myproject.apps.models'
+    name = 'myproject.apps.core'

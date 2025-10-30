@@ -2,10 +2,10 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from .entities.classification import Classification
-from .entities.account_transaction import AccountTransaction
-from .entities.installment import Installment
-from .entities.person import Person
+from .models.classification import Classification
+from .models.account_transaction import AccountTransaction
+from .models.installment import Installment
+from .models.person import Person
 
 def parse_date(date_str):
     """Converte string DD/MM/AAAA para date object"""

@@ -1,9 +1,9 @@
 from django.contrib import admin
 from django.contrib import messages
-from .entities.classification import Classification
-from .entities.installment import Installment
-from .entities.account_transaction import AccountTransaction
-from .entities.person import Person
+from .models.classification import Classification
+from .models.installment import Installment
+from .models.account_transaction import AccountTransaction
+from .models.person import Person
 
 class PersonAdmin(admin.ModelAdmin):
     list_display = ('id', 'razao_social', 'fantasia', 'documento', 'tipo', 'status')
