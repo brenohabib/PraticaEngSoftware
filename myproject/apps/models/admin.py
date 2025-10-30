@@ -1,9 +1,9 @@
 from django.contrib import admin
 from django.contrib import messages
-from .classification import Classification
-from .installment import Installment
-from .account_transaction import AccountTransaction
-from .person import Person
+from .entities.classification import Classification
+from .entities.installment import Installment
+from .entities.account_transaction import AccountTransaction
+from .entities.person import Person
 
 class PersonAdmin(admin.ModelAdmin):
     list_display = ('id', 'razao_social', 'fantasia', 'documento', 'tipo', 'status')
@@ -33,7 +33,6 @@ class AccountTransactionAdmin(admin.ModelAdmin):
                      'fornecedor_cliente__razao_social', 'faturado__razao_social')
     date_hierarchy = 'data_emissao'
     filter_horizontal = ('classificacoes',)  # Interface melhor para ManyToMany
-
 
 # Registrar os models com suas classes Admin
 admin.site.register(Person, PersonAdmin)

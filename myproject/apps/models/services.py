@@ -2,11 +2,10 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from .person import Person
-from .classification import Classification
-from .account_transaction import AccountTransaction
-from .installment import Installment
-
+from .entities.classification import Classification
+from .entities.account_transaction import AccountTransaction
+from .entities.installment import Installment
+from .entities.person import Person
 
 def parse_date(date_str):
     """Converte string DD/MM/AAAA para date object"""
@@ -18,20 +17,17 @@ def parse_date(date_str):
         print(f"Erro ao converter data '{date_str}': {e}")
         return None
 
-
 def normalize_document(document):
     """Remove formatação de CPF/CNPJ (pontos, traços, barras)"""
     if not document:
         return ''
     return ''.join(filter(str.isdigit, str(document)))
 
-
 def safe_strip(value):
     """Retorna string vazia se valor for None, caso contrário faz strip"""
     if value is None or value == 'null':
         return ''
     return str(value).strip()
-
 
 def process_extracted_invoice(data: dict):
     """
@@ -137,7 +133,6 @@ def process_extracted_invoice(data: dict):
     except Exception as e:
         mensagens.append(f"Erro inesperado: {str(e)}")
         return {"success": False, "mensagens": mensagens, "error": str(e)}
-
 
 @transaction.atomic
 def create_service_account(data: dict):
