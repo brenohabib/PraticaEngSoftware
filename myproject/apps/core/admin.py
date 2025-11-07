@@ -1,5 +1,6 @@
 from django.contrib import admin
-from django.contrib import messages
+
+from myproject.apps.core.models.account_tansaction_classification import AccountTransactionClassification
 from .models.classification import Classification
 from .models.installment import Installment
 from .models.account_transaction import AccountTransaction
@@ -32,10 +33,17 @@ class AccountTransactionAdmin(admin.ModelAdmin):
     search_fields = ('numero_nota_fiscal', 'descricao', 
                      'fornecedor_cliente__razao_social', 'faturado__razao_social')
     date_hierarchy = 'data_emissao'
-    filter_horizontal = ('classificacoes',)  # Interface melhor para ManyToMany
+
+class AccountTransactionClassificationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'account_transaction', 'classification', 'data_relacionamento')
+    list_display_links = ('id', 'account_transaction', 'classification')
+    list_filter = ('account_transaction__tipo', 'classification__tipo')
+    search_fields = ('account_transaction__numero_nota_fiscal', 'classification__descricao')
+    date_hierarchy = 'data_relacionamento'
 
 # Registrar os models com suas classes Admin
 admin.site.register(Person, PersonAdmin)
 admin.site.register(Classification, ClassificationAdmin)
 admin.site.register(Installment, InstallmentAdmin)
 admin.site.register(AccountTransaction, AccountTransactionAdmin)
+admin.site.register(AccountTransactionClassification, AccountTransactionClassificationAdmin)

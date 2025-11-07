@@ -24,14 +24,15 @@ class AccountTransaction(models.Model):
         related_name='movimentos'
     )
     faturado = models.ForeignKey(
-        Person, 
-        on_delete=models.PROTECT, 
+        Person,
+        on_delete=models.PROTECT,
         related_name='movimentos_faturados'
     )
-    
+
     classificacoes = models.ManyToManyField(
         Classification,
-        db_table='MovimentoContas_Classificacao'
+        through='AccountTransactionClassification',
+        related_name='account_transactions',
     )
 
     def __str__(self):
