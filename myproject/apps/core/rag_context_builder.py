@@ -214,7 +214,7 @@ class RAGContextBuilder:
         if not transactions.exists():
             return ""
 
-        lines = ["### Transações Encontradas:\n"]
+        lines = ["### Notas Fiscais Encontradas:\n"]
         for tx in transactions[:20]:  # Limita a 20 para não consumir muitos tokens
             classificacoes = ", ".join([c.descricao for c in tx.classificacoes.all()])
             lines.append(
@@ -225,7 +225,7 @@ class RAGContextBuilder:
                 f"  Valor Total: R$ {tx.valor_total:,.2f}\n"
                 f"  Tipo: {tx.tipo}\n"
                 f"  Classificações: {classificacoes}\n"
-                f"  Descrição: {tx.descricao_produtos}\n"
+                f"  Descrição: {tx.descricao}\n"
             )
 
         return "\n".join(lines)
@@ -261,8 +261,8 @@ class RAGContextBuilder:
             count=Count('id')
         ).order_by('-total')[:10]
 
-        lines = ["### Resumo das Transações:\n"]
-        lines.append(f"Total de transações: {count}")
+        lines = ["### Resumo das Notas Fiscais:\n"]
+        lines.append(f"Total de notas fiscais: {count}")
         lines.append(f"Valor total: R$ {total_value:,.2f}\n")
 
         if by_type:
@@ -344,15 +344,15 @@ class RAGContextBuilder:
         Returns:
             QuerySet: Parcelas encontradas
         """
-        query = Q(status='ativo')
+        query = Q()
 
         if transactions and transactions.exists():
-            query &= Q(transacao__in=transactions)
+            query &= Q(account_transaction__in=transactions)
 
         if start_date and end_date:
             query &= Q(data_vencimento__range=[start_date, end_date])
 
-        installments = Installment.objects.filter(query).select_related('transacao')
+        installments = Installment.objects.filter(query).select_related('account_transaction')
         return installments
 
     def _format_classification_context(self, classifications):
@@ -394,7 +394,7 @@ class RAGContextBuilder:
         for inst in installments[:30]:  # Limita a 30 para não consumir muitos tokens
             lines.append(
                 f"- Parcela: {inst.identificacao}\n"
-                f"  Transação: Nota Fiscal {inst.transacao.numero_nota_fiscal}\n"
+                f"  Transação: Nota Fiscal {inst.account_transaction.numero_nota_fiscal}\n"
                 f"  Valor Parcela: R$ {inst.valor_parcela:,.2f}\n"
                 f"  Valor Pago: R$ {inst.valor_pago:,.2f}\n"
                 f"  Saldo: R$ {inst.valor_saldo:,.2f}\n"
@@ -415,7 +415,7 @@ class RAGContextBuilder:
             str: Contexto formatado
         """
         if not installments.exists():
-            return ""
+            return "" 
 
         # Calcula totais
         total_value = installments.aggregate(total=Sum('valor_parcela'))['total'] or 0
