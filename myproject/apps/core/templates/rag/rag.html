@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Query - Consulta Inteligente</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'rag/rag.css' %}">
+</head>
+<body>
+    <div class="header">
+        <h1>Consulta RAG</h1>
+        <p class="subtitle">Faça perguntas sobre seus documentos ou dados do banco</p>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="message {% if message.tags %}{{ message.tags }}{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="rag-form">
+        <form id="rag-form" method="post">
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label for="question">Sua pergunta: *</label>
+                <input
+                    type="text"
+                    id="question"
+                    name="question"
+                    placeholder="Ex: Qual o valor total das transações?"
+                    required
+                >
+            </div>
+            <button type="submit" class="btn-submit">Consultar</button>
+        </form>
+    </div>
+
+    <div id="loading" style="display: none; text-align: center; margin: 20px 0;">
+        <p>Processando sua pergunta...</p>
+    </div>
+
+    <div id="response-container" class="response-container" style="display: none;">
+        <h2>Resposta:</h2>
+        <div id="response-content" class="response-content"></div>
+        <div id="response-info" class="response-info"></div>
+    </div>
+
+    <div id="error-container" class="message error" style="display: none;"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('rag-form');
+            const loading = document.getElementById('loading');
+            const responseContainer = document.getElementById('response-container');
+            const responseContent = document.getElementById('response-content');
+            const responseInfo = document.getElementById('response-info');
+            const errorContainer = document.getElementById('error-container');
+
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                // Esconde mensagens anteriores
+                responseContainer.style.display = 'none';
+                errorContainer.style.display = 'none';
+                loading.style.display = 'block';
+
+                const formData = new FormData(form);
+
+                try {
+                    const response = await fetch(form.action || window.location.href, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+
+                    const data = await response.json();
+
+                    loading.style.display = 'none';
+
+                    if (data.error) {
+                        errorContainer.textContent = data.error;
+                        errorContainer.style.display = 'block';
+                    } else {
+                        responseContent.textContent = data.response;
+
+                        // Monta a informação sobre o contexto
+                        let infoText = '';
+                        if (data.context_used) {
+                            if (data.db_context_used) {
+                                infoText = `✓ Resposta baseada em ${data.num_documents} seção(ões) do banco de dados`;
+                            } else {
+                                infoText = `✓ Resposta baseada em contexto fornecido`;
+                            }
+                        } else {
+                            infoText = 'ℹ Resposta sem contexto específico do banco de dados';
+                        }
+
+                        responseInfo.textContent = infoText;
+                        responseContainer.style.display = 'block';
+                    }
+                } catch (error) {
+                    loading.style.display = 'none';
+                    errorContainer.textContent = 'Erro ao processar a requisição: ' + error.message;
+                    errorContainer.style.display = 'block';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

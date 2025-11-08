@@ -1,36 +1,17 @@
 import os
 import json
-import time
-import logging
-from google import genai
-from google.genai import types
-from dotenv import load_dotenv
 
-# Configuração de logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+from ..agent import BaseAgent
 
-# Carrega variáveis de ambiente
-load_dotenv()
-
-# Configura a API do Gemini
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    logger.error("GEMINI_API_KEY não encontrada nas variáveis de ambiente")
-    raise ValueError("GEMINI_API_KEY não configurada")
-
-client = genai.Client(api_key=api_key)
-
-
-class PDFExtractorAgent:
+class PDFExtractorAgent(BaseAgent):
     def __init__(self, model_name='gemini-2.5-flash-lite'):
         """
         Inicializa o agente extrator de PDFs.
-        
+
         Args:
             model_name (str): Nome do modelo Gemini a ser utilizado
         """
-        self.model_name = model_name
+        super().__init__(model_name)
         self.prompt_template = """
             Você é um especialista em análise de documentos fiscais. Analise a nota fiscal fornecida e extraia apenas as informações solicitadas, retornando um **JSON válido** no formato especificado abaixo.
 
@@ -97,120 +78,73 @@ class PDFExtractorAgent:
 
         """
 
-    def _clean_json_response(self, response_text):
-        """
-        Limpa a resposta da API para extrair apenas o JSON válido.
-        
-        Args:
-            response_text (str): Texto da resposta da API
-            
-        Returns:
-            str: JSON limpo
-        """
-        json_str = response_text.strip()
-        if json_str.startswith("```json"):
-            json_str = json_str[7:]
-        elif json_str.startswith("```"):
-            json_str = json_str[3:]
-        if json_str.endswith("```"):
-            json_str = json_str[:-3]
-        
-        return json_str.strip()
-
     def extract_pdf_to_json(self, pdf_path, max_retries=3, retry_delay=2):
         """
         Extrai informações de um PDF e retorna em formato JSON usando upload direto do arquivo
-        
+
         Args:
             pdf_path (str): Caminho para o arquivo PDF
             max_retries (int): Número máximo de tentativas em caso de falha
             retry_delay (int): Tempo de espera entre tentativas em segundos
-            
+
         Returns:
             dict: Dados extraídos em formato JSON ou mensagem de erro
         """
-        uploaded_file = None
-        
         # Validação inicial do arquivo
         if not os.path.exists(pdf_path):
-            logger.error(f"Arquivo não encontrado: {pdf_path}")
+            self.logger.error(f"Arquivo não encontrado: {pdf_path}")
             return {"error": f"Arquivo não encontrado: {pdf_path}"}
-        
+
         # Tenta fazer upload do arquivo
         try:
-            logger.info(f"Fazendo upload do arquivo: {pdf_path}")
-            uploaded_file = client.files.upload(file=pdf_path)
-            logger.info(f"Arquivo enviado com sucesso. URI: {uploaded_file.uri}")
+            self.logger.info(f"Fazendo upload do arquivo: {pdf_path}")
+            uploaded_file = self.client.files.upload(file=pdf_path)
+            self.logger.info(f"Arquivo enviado com sucesso. URI: {uploaded_file.uri}")
         except Exception as e:
-            logger.error(f"Erro ao fazer upload do arquivo: {str(e)}")
+            self.logger.error(f"Erro ao fazer upload do arquivo: {str(e)}")
             return {"error": f"Falha no upload do arquivo: {str(e)}"}
-        
-        # Loop de tentativas para processar o PDF
-        for attempt in range(1, max_retries + 1):
-            try:
-                logger.info(f"Tentativa {attempt}/{max_retries} - Processando PDF...")
-                
-                # Gera o conteúdo usando o arquivo já carregado
-                response = client.models.generate_content(
-                    model=self.model_name,
-                    contents=[self.prompt_template, uploaded_file]
-                )
-                
-                # Extrai o texto da resposta
-                if not response or not response.text:
-                    raise ValueError("Resposta vazia da API")
-                
-                response_text = response.text
-                
-                # Limpa e valida o JSON
-                cleaned_json = self._clean_json_response(response_text)
-                
-                # Tenta fazer o parse do JSON
-                extracted_data = json.loads(cleaned_json)
-                
-                logger.info("Extração concluída com sucesso!")
-                return extracted_data
-                
-            except json.JSONDecodeError as e:
-                logger.error(f"Tentativa {attempt}/{max_retries} - Erro ao decodificar JSON: {str(e)}")
-                logger.debug(f"Resposta que causou erro: {response_text[:500]}...")
-                
-                if attempt < max_retries:
-                    logger.info(f"Aguardando {retry_delay}s antes da próxima tentativa...")
-                    time.sleep(retry_delay)
-                else:
-                    return {
-                        "error": "Falha ao decodificar JSON após todas as tentativas",
-                        "raw_response": response_text,
-                        "attempts": max_retries
-                    }
-                    
-            except ValueError as e:
-                logger.error(f"Tentativa {attempt}/{max_retries} - Erro de validação: {str(e)}")
-                
-                if attempt < max_retries:
-                    logger.info(f"Aguardando {retry_delay}s antes da próxima tentativa...")
-                    time.sleep(retry_delay)
-                else:
-                    return {
-                        "error": f"Erro de validação após todas as tentativas: {str(e)}",
-                        "attempts": max_retries
-                    }
-                    
-            except Exception as e:
-                logger.error(f"Tentativa {attempt}/{max_retries} - Erro inesperado: {str(e)}")
-                
-                if attempt < max_retries:
-                    logger.info(f"Aguardando {retry_delay}s antes da próxima tentativa...")
-                    time.sleep(retry_delay)
-                else:
-                    return {
-                        "error": f"Erro inesperado após todas as tentativas: {str(e)}",
-                        "attempts": max_retries
-                    }
-        
-        # Se chegou aqui, todas as tentativas falhar
-        return {
-            "error": "Todas as tentativas de extração falharam",
-            "attempts": max_retries
-        }
+
+        # Define a operação de extração que será executada com retry
+        def extraction_operation():
+            # Gera o conteúdo usando o arquivo já carregado
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=[self.prompt_template, uploaded_file]
+            )
+
+            # Extrai o texto da resposta
+            if not response or not response.text:
+                raise ValueError("Resposta vazia da API")
+
+            response_text = response.text
+
+            # Limpa e valida o JSON
+            cleaned_json = self._clean_json_response(response_text)
+
+            # Tenta fazer o parse do JSON
+            extracted_data = json.loads(cleaned_json)
+
+            return extracted_data
+
+        # Executa a operação com retry
+        return self._retry_with_backoff(
+            operation=extraction_operation,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            operation_name="extração de PDF"
+        )
+
+    def process(self, pdf_path, max_retries=3, retry_delay=2):
+        """
+        Implementação do método abstrato process().
+        Alias para extract_pdf_to_json() mantendo compatibilidade.
+
+        Args:
+            pdf_path (str): Caminho para o arquivo PDF
+            max_retries (int): Número máximo de tentativas em caso de falha
+            retry_delay (int): Tempo de espera entre tentativas em segundos
+
+        Returns:
+            dict: Dados extraídos em formato JSON ou mensagem de erro
+        """
+        return self.extract_pdf_to_json(pdf_path, max_retries, retry_delay)

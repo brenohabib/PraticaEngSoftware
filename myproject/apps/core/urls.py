@@ -3,4 +3,5 @@ from . import views
 
 urlpatterns = [
     path('upload/', views.upload_pdf, name='upload_pdf'),
+    path('rag/', views.simple_rag, name='rag_query'),
 ]
