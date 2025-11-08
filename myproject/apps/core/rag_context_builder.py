@@ -284,6 +284,168 @@ class RAGContextBuilder:
 
         return "\n".join(lines)
 
+    def _extract_classification_names(self):
+        """
+        Extrai nomes de classificações mencionadas na pergunta.
+
+        Returns:
+            list: Lista de nomes de classificação encontrados
+        """
+        # Lista de classificações conhecidas
+        known_classifications = [
+            'INSUMOS AGRÍCOLAS', 'MANUTENÇÃO E OPERAÇÃO', 'RECURSOS HUMANOS',
+            'SERVIÇOS OPERACIONAIS', 'INFRAESTRUTURA E UTILIDADES',
+            'ADMINISTRATIVAS', 'SEGUROS E PROTEÇÃO', 'IMPOSTOS E TAXAS',
+            'INVESTIMENTOS', 'OUTRAS DESPESAS'
+        ]
+
+        found = []
+        question_upper = self.question.upper()
+
+        for classification in known_classifications:
+            # Verifica se o nome completo ou palavras-chave estão na pergunta
+            if classification in question_upper:
+                found.append(classification)
+            else:
+                # Verifica palavras-chave específicas
+                keywords = classification.split()
+                if any(keyword in question_upper for keyword in keywords if len(keyword) > 3):
+                    found.append(classification)
+
+        return found
+
+    def _query_classifications(self, classification_names=None):
+        """
+        Consulta classificações no banco de dados.
+
+        Args:
+            classification_names (list): Nomes de classificações para filtrar
+
+        Returns:
+            QuerySet: Classificações encontradas
+        """
+        query = Q(status='ativo')
+
+        if classification_names:
+            query &= Q(descricao__in=classification_names)
+
+        classifications = Classification.objects.filter(query)
+        return classifications
+
+    def _query_installments(self, transactions=None, start_date=None, end_date=None):
+        """
+        Consulta parcelas no banco de dados.
+
+        Args:
+            transactions (QuerySet): Transações relacionadas às parcelas
+            start_date (date): Data inicial de vencimento
+            end_date (date): Data final de vencimento
+
+        Returns:
+            QuerySet: Parcelas encontradas
+        """
+        query = Q(status='ativo')
+
+        if transactions and transactions.exists():
+            query &= Q(transacao__in=transactions)
+
+        if start_date and end_date:
+            query &= Q(data_vencimento__range=[start_date, end_date])
+
+        installments = Installment.objects.filter(query).select_related('transacao')
+        return installments
+
+    def _format_classification_context(self, classifications):
+        """
+        Formata informações de classificações para o contexto.
+
+        Args:
+            classifications (QuerySet): Classificações a formatar
+
+        Returns:
+            str: Contexto formatado
+        """
+        if not classifications.exists():
+            return ""
+
+        lines = ["### Classificações Cadastradas:\n"]
+        for classification in classifications[:15]:  # Limita a 15
+            lines.append(
+                f"- {classification.descricao}\n"
+                f"  Tipo: {classification.tipo}\n"
+            )
+
+        return "\n".join(lines)
+
+    def _format_installment_context(self, installments):
+        """
+        Formata informações de parcelas para o contexto.
+
+        Args:
+            installments (QuerySet): Parcelas a formatar
+
+        Returns:
+            str: Contexto formatado
+        """
+        if not installments.exists():
+            return ""
+
+        lines = ["### Parcelas Encontradas:\n"]
+        for inst in installments[:30]:  # Limita a 30 para não consumir muitos tokens
+            lines.append(
+                f"- Parcela: {inst.identificacao}\n"
+                f"  Transação: Nota Fiscal {inst.transacao.numero_nota_fiscal}\n"
+                f"  Valor Parcela: R$ {inst.valor_parcela:,.2f}\n"
+                f"  Valor Pago: R$ {inst.valor_pago:,.2f}\n"
+                f"  Saldo: R$ {inst.valor_saldo:,.2f}\n"
+                f"  Status: {inst.status_parcela}\n"
+                f"  Vencimento: {inst.data_vencimento.strftime('%d/%m/%Y')}\n"
+            )
+
+        return "\n".join(lines)
+
+    def _format_installment_summary_context(self, installments):
+        """
+        Formata resumo de parcelas (totais, contagens) para o contexto.
+
+        Args:
+            installments (QuerySet): Parcelas para sumarizar
+
+        Returns:
+            str: Contexto formatado
+        """
+        if not installments.exists():
+            return ""
+
+        # Calcula totais
+        total_value = installments.aggregate(total=Sum('valor_parcela'))['total'] or 0
+        total_paid = installments.aggregate(total=Sum('valor_pago'))['total'] or 0
+        total_balance = installments.aggregate(total=Sum('valor_saldo'))['total'] or 0
+        count = installments.count()
+
+        # Agrupa por status
+        by_status = installments.values('status_parcela').annotate(
+            total=Sum('valor_parcela'),
+            saldo=Sum('valor_saldo'),
+            count=Count('id')
+        ).order_by('-count')
+
+        lines = ["### Resumo das Parcelas:\n"]
+        lines.append(f"Total de parcelas: {count}")
+        lines.append(f"Valor total: R$ {total_value:,.2f}")
+        lines.append(f"Valor pago: R$ {total_paid:,.2f}")
+        lines.append(f"Saldo restante: R$ {total_balance:,.2f}\n")
+
+        if by_status:
+            lines.append("\n**Por Status:**")
+            for item in by_status:
+                lines.append(
+                    f"- {item['status_parcela']}: {item['count']} parcelas, "
+                    f"R$ {item['total']:,.2f} (saldo: R$ {item['saldo']:,.2f})"
+                )
+
+        return "\n".join(lines)
+
     def build_context(self):
         """
         Constrói o contexto completo analisando a pergunta e consultando o banco.
@@ -295,6 +457,7 @@ class RAGContextBuilder:
         documents = self._extract_document_number()
         invoice_numbers = self._extract_invoice_number()
         start_date, end_date = self._extract_period()
+        classification_names = self._extract_classification_names()
 
         # Consulta pessoas se relevante
         persons = None
@@ -303,12 +466,20 @@ class RAGContextBuilder:
             if persons.exists():
                 self.context_parts.append(self._format_person_context(persons))
 
+        # Consulta classificações se relevante
+        if classification_names or self._contains_keywords(self.KEYWORDS_CLASSIFICATION):
+            classifications = self._query_classifications(classification_names)
+            if classifications.exists():
+                self.context_parts.append(self._format_classification_context(classifications))
+
         # Consulta transações
+        transactions = None
         if (self._contains_keywords(self.KEYWORDS_TRANSACTION) or
             self._contains_keywords(self.KEYWORDS_TOTAL) or
             self._contains_keywords(self.KEYWORDS_COUNT) or
             self._contains_keywords(self.KEYWORDS_LIST) or
-            invoice_numbers or start_date or documents):
+            invoice_numbers or start_date or documents or
+            self._contains_keywords(self.KEYWORDS_CLASSIFICATION)):
 
             transactions = self._query_transactions(
                 persons=persons,
@@ -316,6 +487,10 @@ class RAGContextBuilder:
                 start_date=start_date,
                 end_date=end_date
             )
+
+            # Filtra por classificação se especificada
+            if classification_names and transactions.exists():
+                transactions = transactions.filter(classificacoes__descricao__in=classification_names).distinct()
 
             if transactions.exists():
                 # Se a pergunta pede resumo/total, fornece informações agregadas
@@ -325,6 +500,23 @@ class RAGContextBuilder:
                 else:
                     # Caso contrário, fornece lista detalhada
                     self.context_parts.append(self._format_transaction_context(transactions))
+
+        # Consulta parcelas se relevante
+        if self._contains_keywords(self.KEYWORDS_INSTALLMENT) or transactions:
+            installments = self._query_installments(
+                transactions=transactions,
+                start_date=start_date,
+                end_date=end_date
+            )
+
+            if installments.exists():
+                # Se a pergunta pede resumo/total, fornece informações agregadas
+                if (self._contains_keywords(self.KEYWORDS_TOTAL) or
+                    self._contains_keywords(self.KEYWORDS_COUNT)):
+                    self.context_parts.append(self._format_installment_summary_context(installments))
+                else:
+                    # Caso contrário, fornece lista detalhada
+                    self.context_parts.append(self._format_installment_context(installments))
 
         # Junta todas as partes do contexto
         if self.context_parts:
