@@ -5,12 +5,6 @@ from ..agent import BaseAgent
 
 class PDFExtractorAgent(BaseAgent):
     def __init__(self, model_name='gemini-2.5-flash-lite'):
-        """
-        Inicializa o agente extrator de PDFs.
-
-        Args:
-            model_name (str): Nome do modelo Gemini a ser utilizado
-        """
         super().__init__(model_name)
         self.prompt_template = """
             Você é um especialista em análise de documentos fiscais. Analise a nota fiscal fornecida e extraia apenas as informações solicitadas, retornando um **JSON válido** no formato especificado abaixo.

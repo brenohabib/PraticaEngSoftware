@@ -2,9 +2,8 @@ from django.shortcuts import render
 from django.contrib import messages
 from django.http import JsonResponse
 from ...agents.extraction.invoice_extractor import PDFExtractorAgent
-from ...agents.simple_rag.rag import SimpleRAGAgent
+from ...agents.simple_rag import SimpleRAGAgent
 from .services import process_extracted_invoice
-from .rag_context_builder import build_rag_context
 import json
 import os
 from django.conf import settings
@@ -57,24 +56,16 @@ def simple_rag(request):
     if request.method == 'POST':
         question = (request.POST.get('question') or '').strip()
 
-        # Constrói contexto a partir do banco de dados
-        db_context = build_rag_context(question)
-
-        # Inicializa o agente RAG
+        # Usa SimpleRAGAgent com Function Calling integrado
+        # O agente decide autonomamente se precisa consultar o banco de dados
         agent = SimpleRAGAgent()
-
-        # Faz a consulta com o contexto do banco
-        result = agent.query(question=question, context=db_context)
-
-        # Conta o número de documentos no contexto (seções separadas por ###)
-        num_documents = db_context.count('###') if db_context else 0
+        result = agent.query(question=question)
 
         return JsonResponse({
             'question': question,
-            'num_documents': num_documents,
             'response': result.get('response'),
-            'context_used': result.get('context_used'),
-            'db_context_used': bool(db_context),
+            'tools_used': result.get('tools_used', []),
+            'db_query_performed': result.get('db_query_performed', False),
             'error': result.get('error'),
         })
 

@@ -9,8 +9,8 @@
 </head>
 <body>
     <div class="header">
-        <h1>Consulta RAG</h1>
-        <p class="subtitle">Faça perguntas sobre seus documentos ou dados do banco</p>
+        <h1>Assistente Financeiro Inteligente</h1>
+        <p class="subtitle">Faça perguntas em linguagem natural - o agente decide automaticamente quando consultar o banco de dados usando Function Calling</p>
     </div>
 
     {% if messages %}
@@ -31,11 +31,11 @@
                     type="text"
                     id="question"
                     name="question"
-                    placeholder="Ex: Qual o valor total das transações?"
+                    placeholder="Ex: Quais parcelas estão em aberto? Qual o total por classificação? O que é INSS?"
                     required
                 >
             </div>
-            <button type="submit" class="btn-submit">Consultar</button>
+            <button type="submit" class="btn-submit">Enviar</button>
         </form>
     </div>
 
@@ -46,7 +46,9 @@
     <div id="response-container" class="response-container" style="display: none;">
         <h2>Resposta:</h2>
         <div id="response-content" class="response-content"></div>
-        <div id="response-info" class="response-info"></div>
+        <div id="response-info" class="response-info" style="margin-top: 10px; font-style: italic; color: #666;">
+            Resposta gerada por IA
+        </div>
     </div>
 
     <div id="error-container" class="message error" style="display: none;"></div>
@@ -57,7 +59,6 @@
             const loading = document.getElementById('loading');
             const responseContainer = document.getElementById('response-container');
             const responseContent = document.getElementById('response-content');
-            const responseInfo = document.getElementById('response-info');
             const errorContainer = document.getElementById('error-container');
 
             form.addEventListener('submit', async function(e) {
@@ -87,21 +88,8 @@
                         errorContainer.textContent = data.error;
                         errorContainer.style.display = 'block';
                     } else {
+                        // Exibe resposta
                         responseContent.textContent = data.response;
-
-                        // Monta a informação sobre o contexto
-                        let infoText = '';
-                        if (data.context_used) {
-                            if (data.db_context_used) {
-                                infoText = `✓ Resposta baseada em ${data.num_documents} seção(ões) do banco de dados`;
-                            } else {
-                                infoText = `✓ Resposta baseada em contexto fornecido`;
-                            }
-                        } else {
-                            infoText = 'ℹ Resposta sem contexto específico do banco de dados';
-                        }
-
-                        responseInfo.textContent = infoText;
                         responseContainer.style.display = 'block';
                     }
                 } catch (error) {
