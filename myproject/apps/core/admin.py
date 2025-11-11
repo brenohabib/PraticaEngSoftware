@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from myproject.apps.core.models.account_tansaction_classification import AccountTransactionClassification
+from myproject.apps.core.models.account_transaction_classification import AccountTransactionClassification
 from .models.classification import Classification
 from .models.installment import Installment
 from .models.account_transaction import AccountTransaction

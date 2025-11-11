@@ -1,6 +1,7 @@
 from django.db import models
 from .person import Person
 from .classification import Classification
+from pgvector.django import VectorField, HnswIndex
 
 class AccountTransaction(models.Model):
     TIPO_CHOICES = [
@@ -12,6 +13,11 @@ class AccountTransaction(models.Model):
         ('ativo', 'Ativo'),
         ('inativo', 'Inativo'),
     ]
+
+    descricao_embedding = VectorField(
+        dimensions=768,
+        null=True,
+    )
 
     tipo = models.CharField(max_length=45, default = 'a pagar', choices=TIPO_CHOICES)
     numero_nota_fiscal = models.CharField(max_length=45, unique=True)
@@ -52,3 +58,13 @@ class AccountTransaction(models.Model):
     class Meta:
         verbose_name = "Account Transaction"
         verbose_name_plural = "Account Transactions"
+
+        indexes = [
+            HnswIndex(
+                name='idx_desc_embedding_hnsw',
+                fields=['descricao_embedding'],
+                m=16,
+                ef_construction=64,
+                opclasses=['vector_l2_ops']
+            )
+        ]

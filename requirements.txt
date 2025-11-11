@@ -6,3 +6,7 @@ djangorestframework==3.14.0
 dj-database-url==2.1.0
 google-genai==1.45.0
 python-dotenv==1.1.1
+pgvector==0.4.1
+langchain==1.0.3
+langchain-google-genai==3.0.1
+tiktoken==0.12.0

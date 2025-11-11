@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'myproject.apps.core',
+    'pgvector.django',
 ]
 
 MIDDLEWARE = [

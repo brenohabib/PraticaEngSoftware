@@ -6,6 +6,73 @@ from .models.classification import Classification
 from .models.account_transaction import AccountTransaction
 from .models.installment import Installment
 from .models.person import Person
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+import os
+
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+
+def get_embedding(text: str) -> list[float]:
+    """Gera o embedding para um texto usando Google GenAI."""
+    if not text or text.strip() == 'Sem descrição':
+        print("Texto vazio ou 'Sem descrição', pulando embedding.")
+        return None
+    try:
+        embeddings_model = GoogleGenerativeAIEmbeddings(
+            model="models/gemini-embedding-001",
+            google_api_key=GEMINI_API_KEY)
+        return embeddings_model.embed_query(text)
+    except Exception as e:
+        print(f"Erro ao gerar embedding para '{text}': {e}")
+        return None
+
+def build_rich_text_for_embedding(data: dict, provider_name: str, invoiced_name: str, classifications: list) -> str:
+    """
+    Constrói um texto rico com TODOS os dados relevantes do JSON para gerar um embedding completo.
+    
+    Este texto será usado para:
+    1. Busca semântica (RAG)
+    2. Responder perguntas sobre fornecedores, valores, classificações, etc.
+    
+    Args:
+        data: Dicionário JSON extraído do PDF
+        provider_name: Nome do fornecedor
+        invoiced_name: Nome do faturado
+        classifications: Lista de objetos Classification
+    
+    Returns:
+        String formatada com contexto completo
+    """
+    
+    # Extrai informações do JSON
+    numero_nf = data.get('numero_nota_fiscal', 'S/N')
+    valor_total = data.get('valor_total', 0)
+    data_emissao = data.get('data_emissao', 'não informada')
+    produtos = data.get('descricao_produtos', [])
+    classificacoes_nomes = [c.descricao for c in classifications] if classifications else []
+    qtd_parcelas = data.get('quantidade_parcelas', 1)
+    data_vencimento = data.get('data_vencimento', 'não informada')
+    
+    # Montagem de texto rico estruturado
+    rich_text = f"""
+Nota Fiscal: {numero_nf}
+Fornecedor: {provider_name}
+Cliente/Faturado: {invoiced_name}
+Data de Emissão: {data_emissao}
+Valor Total: R$ {valor_total}
+Quantidade de Parcelas: {qtd_parcelas}
+Data de Vencimento: {data_vencimento}
+
+Produtos/Serviços:
+{' | '.join(produtos) if produtos else 'Não especificado'}
+
+Classificações/Categorias de Despesa:
+{', '.join(classificacoes_nomes) if classificacoes_nomes else 'Não especificado'}
+
+Tipo de Transação: A Pagar
+Status: Ativo
+""".strip()
+    
+    return rich_text
 
 def parse_date(date_str):
     """Converte string DD/MM/AAAA para date object"""
@@ -28,111 +95,6 @@ def safe_strip(value):
     if value is None or value == 'null':
         return ''
     return str(value).strip()
-
-def process_extracted_invoice(data: dict):
-    """
-      - Verifica se fornecedor, faturado e classificações existem
-      - Cria novos cadastros se necessário
-      - Cria o movimento e as parcelas
-      - Retorna relatório de verificações e sucesso ou falha
-    """
-    mensagens = []
-    try:
-        # Verify provider
-        provider_data = data.get('fornecedor', {})
-        provider_doc = normalize_document(provider_data.get('cnpj'))
-        provider_razao = safe_strip(provider_data.get('razao_social'))
-        provider_fantasia = safe_strip(provider_data.get('fantasia')) or None
-        
-        provider = Person.objects.filter(documento=provider_doc).first()
-        if provider:
-            mensagens.append(f"FORNECEDOR: {provider_razao} - EXISTE (ID: {provider.id})")
-        else:
-            mensagens.append(f"FORNECEDOR: {provider_razao} - NÃO EXISTE")
-            provider = Person.objects.create(
-                tipo='fornecedor',
-                razao_social=provider_razao,
-                fantasia=provider_fantasia,
-                documento=provider_doc,
-                status='ativo'
-            )
-            mensagens.append(f"Novo fornecedor criado: {provider.razao_social}")
-        
-        # Verify invoiced
-        invoiced_data = data.get('faturado', {})
-        invoiced_doc = normalize_document(invoiced_data.get('cpf_cnpj'))
-        invoiced_nome = safe_strip(invoiced_data.get('nome_completo'))
-        
-        invoiced = Person.objects.filter(documento=invoiced_doc).first()
-        if invoiced:
-            mensagens.append(f"FATURADO: {invoiced_nome} - EXISTE (ID: {invoiced.id})")
-        else:
-            mensagens.append(f"FATURADO: {invoiced_nome} - NÃO EXISTE")
-            invoiced = Person.objects.create(
-                tipo='faturado',
-                razao_social=invoiced_nome,
-                documento=invoiced_doc,
-                status='ativo'
-            )
-            mensagens.append(f"Novo faturado criado: {invoiced.razao_social}")
-        
-        # Verify and create classifications
-        classification_list = data.get('classificacao_despesa', [])
-        created_classifications = []
-        linked_classifications = []
-        
-        for c in classification_list:
-            c = safe_strip(c)
-            if not c:
-                continue
-            
-            classification = Classification.objects.filter(descricao__iexact=c).first()
-            if classification:
-                mensagens.append(f"DESPESA: {c} - EXISTE (ID: {classification.id})")
-                linked_classifications.append(classification)
-            else:
-                mensagens.append(f"DESPESA: {c} - NÃO EXISTE")
-                classification = Classification.objects.create(
-                    tipo='despesa',
-                    descricao=c,
-                    status='ativo'
-                )
-                created_classifications.append(classification)
-                linked_classifications.append(classification)
-                mensagens.append(f"Nova classificação criada: {c}")
-        
-        # Create transactions and installments
-        with transaction.atomic():
-            result = create_service_account(data)
-            
-            # Se houve erro na criação, retorna o erro
-            if not result.get('success'):
-                mensagens.append(f"Erro ao criar registro: {result.get('error')}")
-                return {
-                    "success": False,
-                    "mensagens": mensagens,
-                    "error": result.get('error')
-                }
-            
-            mensagens.append("Registro de movimento criado com sucesso.")
-        
-        # Return result complete
-        return {
-            "success": True,
-            "mensagens": mensagens,
-            "numero_nota_fiscal": result.get("numero_nota_fiscal"),
-            "fornecedor": result.get("fornecedor"),
-            "faturado": result.get("faturado"),
-            "valor_total": result.get("valor_total"),
-            "classificacoes": result.get("classificacoes"),
-        }
-    
-    except ValidationError as e:
-        mensagens.append(f"Erro de validação: {str(e)}")
-        return {"success": False, "mensagens": mensagens, "error": str(e)}
-    except Exception as e:
-        mensagens.append(f"Erro inesperado: {str(e)}")
-        return {"success": False, "mensagens": mensagens, "error": str(e)}
 
 @transaction.atomic
 def create_service_account(data: dict):
@@ -200,7 +162,7 @@ def create_service_account(data: dict):
         total_value = Decimal(str(data.get('valor_total', 0)))
         product_description = data.get('descricao_produtos', [])
         product_description = ' | '.join(product_description) if product_description else 'Sem descrição'
-        product_description = product_description[:300]
+        product_description = product_description[:300] # Garante limite do CharField
         number_nf = safe_strip(data.get('numero_nota_fiscal')) or 'S/N'
         
         # Check if invoice number already exists
@@ -211,7 +173,7 @@ def create_service_account(data: dict):
             tipo='a pagar',
             numero_nota_fiscal=number_nf,
             data_emissao=data_emissao,
-            descricao=product_description,
+            descricao=product_description, # Salva a descrição limpa
             status='ativo',
             valor_total=total_value,
             fornecedor_cliente=provider,
@@ -246,7 +208,26 @@ def create_service_account(data: dict):
             account_transaction.classificacoes.set(classification_created)
             print(f"Classificações associadas: {len(classification_created)}")
         
-        # Create installments 
+        # Indexação de RAG para criar um contexto rico
+        print("Gerando contexto rico para embedding...")
+        text_to_embed = build_rich_text_for_embedding(
+            data=data,
+            provider_name=provider.razao_social,
+            invoiced_name=invoiced.razao_social,
+            classifications=classification_created # Passa a lista de objetos
+        )
+
+        print(f"Contexto a ser indexado: \n{text_to_embed}")
+
+        embedding_vector = get_embedding(text_to_embed)
+        if embedding_vector:
+            account_transaction.descricao_embedding = embedding_vector
+            account_transaction.save(update_fields=['descricao_embedding']) 
+            print(f"Embedding de Super-Contexto salvo para a transação #{account_transaction.id}")
+        else:
+            print(f"Falha ao gerar embedding para a transação #{account_transaction.id}")
+        
+        # 6. Create installments 
         qtd_installments = int(data.get('quantidade_parcelas', 1))
         data_vencimento = parse_date(data.get('data_vencimento'))
         
@@ -286,12 +267,81 @@ def create_service_account(data: dict):
         return {
             'success': False,
             'error': str(e)
+            
         }
     except Exception as e:
         print(f"Erro ao salvar dados: {str(e)}")
-        import traceback
-        traceback.print_exc()  # Imprime o stack trace completo para debug
         return {
             'success': False,
             'error': f"Erro inesperado: {str(e)}"
         }
+
+def process_extracted_invoice(data: dict):
+    """
+     - Verifica se fornecedor, faturado e classificações existem
+     - Cria novos cadastros se necessário
+     - Chama create_service_account para criar o movimento e as parcelas
+     - Retorna relatório de verificações e sucesso ou falha
+    """
+    mensagens = []
+    try:
+        # Verify provider
+        provider_data = data.get('fornecedor', {})
+        provider_doc = normalize_document(provider_data.get('cnpj'))
+        provider_razao = safe_strip(provider_data.get('razao_social'))
+        
+        provider = Person.objects.filter(documento=provider_doc).first()
+        if provider:
+            mensagens.append(f"FORNECEDOR: {provider_razao} - EXISTE (ID: {provider.id})")
+        else:
+            mensagens.append(f"FORNECEDOR: {provider_razao} - NÃO EXISTE (será criado)")
+        
+        # Verify invoiced
+        invoiced_data = data.get('faturado', {})
+        invoiced_doc = normalize_document(invoiced_data.get('cpf_cnpj'))
+        invoiced_nome = safe_strip(invoiced_data.get('nome_completo'))
+        
+        invoiced = Person.objects.filter(documento=invoiced_doc).first()
+        if invoiced:
+            mensagens.append(f"FATURADO: {invoiced_nome} - EXISTE (ID: {invoiced.id})")
+        else:
+            mensagens.append(f"FATURADO: {invoiced_nome} - NÃO EXISTE (será criado)")
+        
+        # Verify and create classifications
+        classification_list = data.get('classificacao_despesa', [])
+        
+        for c in classification_list:
+            c = safe_strip(c)
+            if not c:
+                continue
+            
+            classification = Classification.objects.filter(descricao__iexact=c).first()
+            if classification:
+                mensagens.append(f"DESPESA: {c} - EXISTE (ID: {classification.id})")
+            else:
+                mensagens.append(f"DESPESA: {c} - NÃO EXISTE (será criada)")
+        
+        # Create transactions and installments (dentro de uma transação atômica)
+        with transaction.atomic():
+            result = create_service_account(data)
+            
+            # Se houve erro na criação, retorna o erro
+            if not result.get('success'):
+                mensagens.append(f"Erro ao criar registro: {result.get('error')}")
+                return {
+                    "success": False,
+                    "mensagens": mensagens,
+                    "error": result.get('error')
+                }
+            
+            mensagens.append("Registro de movimento criado com sucesso.")
+        
+        result['mensagens'] = mensagens
+        return result
+    
+    except ValidationError as e:
+        mensagens.append(f"Erro de validação: {str(e)}")
+        return {"success": False, "mensagens": mensagens, "error": str(e)}
+    except Exception as e:
+        mensagens.append(f"Erro inesperado: {str(e)}")
+        return {"success": False, "mensagens": mensagens, "error": str(e)}

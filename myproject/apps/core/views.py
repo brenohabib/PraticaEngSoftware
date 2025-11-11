@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from ...agents.extraction.invoice_extractor import PDFExtractorAgent
 from ...agents.simple_rag import SimpleRAGAgent
+from .models.rag import query_semantic_rag
 from .services import process_extracted_invoice
 import json
 import os
@@ -32,7 +33,7 @@ def upload_pdf(request):
                 messages.info(request, line)
 
             if result.get("success"):
-                messages.success(request, f"✅ Registro criado com sucesso! "
+                messages.success(request, f"Registro criado com sucesso! "
                                           f"Nota: {result['numero_nota_fiscal']} | "
                                           f"Fornecedor: {result['fornecedor']} | "
                                           f"Valor Total: R$ {result['valor_total']:.2f}")
@@ -69,4 +70,37 @@ def simple_rag(request):
             'error': result.get('error'),
         })
 
-    return render(request, 'rag/rag.html')
+    context = {
+        'title': 'Assistente (Agente Simples)',
+        'subtitle': 'O agente decide automaticamente quando consultar o banco de dados.'
+    }
+    return render(request, 'rag/rag.html', context)
+
+def embedding_rag_view(request):
+    if request.method == 'POST':
+        question = (request.POST.get('question') or '').strip()
+
+        if not question:
+            return JsonResponse({'error': 'Nenhuma pergunta fornecida.'}, status=400)
+
+        try:
+            answer = query_semantic_rag(question=question)
+            
+            return JsonResponse({
+                'question': question,
+                'response': answer,
+                'error': None
+            })
+        except Exception as e:
+            print(f"Erro na view embedding_rag_view: {e}")
+            return JsonResponse({
+                'question': question,
+                'response': None,
+                'error': f'Erro interno no servidor ao processar o RAG com embedding: {str(e)}'
+            }, status=500)
+            
+    context = {
+        'title': 'Assistente (RAG Semântico)',
+        'subtitle': 'Busca inteligente com "super-contexto" e embeddings.'
+    }
+    return render(request, 'rag/rag.html', context)
