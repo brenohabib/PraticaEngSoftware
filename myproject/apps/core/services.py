@@ -18,7 +18,7 @@ def get_embedding(text: str) -> list[float]:
         return None
     try:
         embeddings_model = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-001",
+            model="models/text-embedding-004",
             google_api_key=GEMINI_API_KEY)
         return embeddings_model.embed_query(text)
     except Exception as e:

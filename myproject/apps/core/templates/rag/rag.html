@@ -54,12 +54,30 @@
     <div id="error-container" class="message error" style="display: none;"></div>
 
     <script>
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('rag-form');
             const loading = document.getElementById('loading');
             const responseContainer = document.getElementById('response-container');
             const responseContent = document.getElementById('response-content');
             const errorContainer = document.getElementById('error-container');
+
+            // Pega o CSRF token
+            const csrftoken = getCookie('csrftoken');
 
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
@@ -76,7 +94,8 @@
                         method: 'POST',
                         body: formData,
                         headers: {
-                            'X-Requested-With': 'XMLHttpRequest'
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRFToken': csrftoken
                         }
                     });
 
