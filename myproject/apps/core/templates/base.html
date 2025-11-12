@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sistema de Gestão Financeira{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">FinanceAI</div>
+                <div class="sidebar-subtitle">Gestão Inteligente de Finanças</div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Principal</div>
+                    <a href="{% url 'upload_pdf' %}" class="nav-link {% if request.resolver_match.url_name == 'upload_pdf' %}active{% endif %}">
+                        <span>Importar PDF</span>
+                    </a>
+                    <a href="{% url 'rag_query' %}" class="nav-link {% if request.resolver_match.url_name == 'rag_query' %}active{% endif %}">
+                        <span>Assistente IA</span>
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Histórico</div>
+                    <div class="history-section" style="padding: 0 1.5rem;">
+                        <div class="history-placeholder">
+                            Implementação futura de histórico
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div style="font-size: 0.75rem; opacity: 0.7;">
+                    <div>Sistema Financeiro v1.0</div>
+                    <div style="margin-top: 0.25rem;">Powered by Gemini AI</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Conteúdo Principal -->
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,44 +1,113 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload de PDF</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'upload/upload.css' %}">
-    <style>
-        .json-result {
-            background-color: #f5f5f5;
-            padding: 20px;
-            border-radius: 5px;
-            margin-top: 20px;
-            white-space: pre-wrap;
-            font-family: monospace;
-        }
-    </style>
-</head>
-<body>    
-    {% if messages %}
+{% extends 'base.html' %}
+
+{% block title %}Importar Nota Fiscal - FinanceAI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Importar Nota Fiscal</h1>
+    <p class="page-subtitle">
+        Faça upload de um arquivo PDF de nota fiscal para extração automática de dados usando IA
+    </p>
+</div>
+
+<!-- Mensagens do sistema -->
+{% if messages %}
+    <div class="messages-container">
         {% for message in messages %}
-            <div class="message {% if message.tags %}{{ message.tags }}{% endif %}">
+            <div class="message message-{{ message.tags }}">
                 {{ message }}
             </div>
         {% endfor %}
-    {% endif %}
-    
-    <div class="upload-form">
-        <form method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-            <div class="form-group">
-                <label for="pdf_file">Selecione um arquivo PDF:</label>
-                <input type="file" id="pdf_file" name="pdf_file" accept=".pdf" required>
-            </div>
-            <button type="submit" class="btn-submit">Enviar</button>
-        </form>
+    </div>
+{% endif %}
+
+<!-- Card de Upload -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Selecionar arquivo</h2>
     </div>
 
-    {% if json_result %}
-        <div class="json-result">{{ json_result|striptags }}</div>
-    {% endif %}
-</body>
-</html>
+    <form method="post" enctype="multipart/form-data" id="upload-form">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label class="form-label" for="pdf_file">
+                Arquivo PDF da Nota Fiscal
+            </label>
+            <input
+                type="file"
+                id="pdf_file"
+                name="pdf_file"
+                accept=".pdf"
+                required
+                class="form-file-input"
+            >
+            <small style="display: block; margin-top: 0.5rem; color: var(--text-secondary);">
+                Apenas arquivos PDF são aceitos. Tamanho máximo: 10MB
+            </small>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submit-btn">
+            <span id="btn-text">Processar Nota Fiscal</span>
+        </button>
+    </form>
+</div>
+
+<!-- Área de loading -->
+<div id="loading-container" class="card hidden">
+    <div class="loading">
+        <div class="loading-spinner"></div>
+        <span>Processando arquivo... Isso pode levar alguns segundos.</span>
+    </div>
+</div>
+
+<!-- Resultado JSON -->
+{% if json_result %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Dados Extraídos</h2>
+    </div>
+    <div class="code-block">{{ json_result }}</div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('upload-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const btnText = document.getElementById('btn-text');
+        const loadingContainer = document.getElementById('loading-container');
+        const fileInput = document.getElementById('pdf_file');
+
+        // Feedback visual ao selecionar arquivo
+        fileInput.addEventListener('change', function(e) {
+            if (this.files.length > 0) {
+                const fileName = this.files[0].name;
+                const fileSize = (this.files[0].size / 1024 / 1024).toFixed(2); // MB
+
+                // Validação de tamanho
+                if (this.files[0].size > 10 * 1024 * 1024) {
+                    alert('O arquivo é muito grande. Tamanho máximo: 10MB');
+                    this.value = '';
+                    return;
+                }
+
+                console.log(`Arquivo selecionado: ${fileName} (${fileSize} MB)`);
+            }
+        });
+
+        // Mostrar loading ao submeter
+        form.addEventListener('submit', function(e) {
+            submitBtn.disabled = true;
+            btnText.textContent = 'Processando...';
+            loadingContainer.classList.remove('hidden');
+
+            // Scroll suave até o loading
+            loadingContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,123 +1,251 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RAG Query - Consulta Inteligente</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'rag/rag.css' %}">
-</head>
-<body>
-    <div class="header">
-        <h1>Assistente Financeiro Inteligente</h1>
-        <p class="subtitle">Faça perguntas em linguagem natural - o agente decide automaticamente quando consultar o banco de dados usando Function Calling</p>
+{% extends 'base.html' %}
+
+{% block title %}Assistente IA - FinanceAI{% endblock %}
+
+{% block content %}
+
+<!-- Card de configuração do RAG -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Configurações do Assistente</h2>
     </div>
 
-    {% if messages %}
-        {% for message in messages %}
-            <div class="message {% if message.tags %}{{ message.tags }}{% endif %}">
-                {{ message }}
-            </div>
-        {% endfor %}
-    {% endif %}
-
-    <div class="rag-form">
-        <form id="rag-form" method="post">
-            {% csrf_token %}
-
-            <div class="form-group">
-                <label for="question">Sua pergunta: *</label>
-                <input
-                    type="text"
-                    id="question"
-                    name="question"
-                    placeholder="Ex: Quais parcelas estão em aberto? Qual o total por classificação? O que é INSS?"
-                    required
-                >
-            </div>
-            <button type="submit" class="btn-submit">Enviar</button>
-        </form>
-    </div>
-
-    <div id="loading" style="display: none; text-align: center; margin: 20px 0;">
-        <p>Processando sua pergunta...</p>
-    </div>
-
-    <div id="response-container" class="response-container" style="display: none;">
-        <h2>Resposta:</h2>
-        <div id="response-content" class="response-content"></div>
-        <div id="response-info" class="response-info" style="margin-top: 10px; font-style: italic; color: #666;">
-            Resposta gerada por IA
+    <div class="radio-group">
+        <div class="radio-option">
+            <input
+                type="radio"
+                id="rag-simple"
+                name="rag-type"
+                value="simple"
+                class="radio-input"
+                checked
+            >
+            <label for="rag-simple" class="radio-label">
+                <span>RAG Simples</span>
+            </label>
+        </div>
+        <div class="radio-option">
+            <input
+                type="radio"
+                id="rag-embedding"
+                name="rag-type"
+                value="embedding"
+                class="radio-input"
+            >
+            <label for="rag-embedding" class="radio-label">
+                <span>RAG com Embedding</span>
+            </label>
         </div>
     </div>
 
-    <div id="error-container" class="message error" style="display: none;"></div>
+    <div id="rag-description" class="message message-info">
+        <strong>RAG Simples:</strong> Busca os dados dinamicamente.
+        Ideal para perguntas diretas sobre dados estruturados.
+    </div>
+</div>
 
-    <script>
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
+<!-- Container de chat -->
+<div class="chat-container">
+    <!-- Área de mensagens -->
+    <div class="chat-messages" id="chat-messages">
+        <div class="message message-assistant">
+            <strong>Assistente IA</strong>
+            <p style="margin-top: 0.5rem;">
+                Olá! Como posso ajudar hoje?
+            </p>
+        </div>
+    </div>
+
+    <!-- Área de input -->
+    <div class="chat-input-container">
+        <form id="chat-form">
+            {% csrf_token %}
+            <div style="display: flex; gap: 1rem; align-items: flex-end;">
+                <div style="flex: 1;">
+                    <textarea
+                        id="question-input"
+                        name="question"
+                        class="prompt-input"
+                        placeholder="Digite sua pergunta aqui... (Ex: Quais parcelas estão em aberto? Qual o total por classificação?)"
+                        rows="1"
+                        required
+                    ></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" id="send-btn">
+                    Enviar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
                 }
             }
-            return cookieValue;
         }
+        return cookieValue;
+    }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const form = document.getElementById('rag-form');
-            const loading = document.getElementById('loading');
-            const responseContainer = document.getElementById('response-container');
-            const responseContent = document.getElementById('response-content');
-            const errorContainer = document.getElementById('error-container');
+    document.addEventListener('DOMContentLoaded', function() {
+        const chatForm = document.getElementById('chat-form');
+        const questionInput = document.getElementById('question-input');
+        const chatMessages = document.getElementById('chat-messages');
+        const sendBtn = document.getElementById('send-btn');
+        const ragTypeInputs = document.querySelectorAll('input[name="rag-type"]');
+        const ragDescription = document.getElementById('rag-description');
+        const csrftoken = getCookie('csrftoken');
 
-            // Pega o CSRF token
-            const csrftoken = getCookie('csrftoken');
+        // Auto-resize textarea
+        questionInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
 
-            form.addEventListener('submit', async function(e) {
-                e.preventDefault();
-
-                // Esconde mensagens anteriores
-                responseContainer.style.display = 'none';
-                errorContainer.style.display = 'none';
-                loading.style.display = 'block';
-
-                const formData = new FormData(form);
-
-                try {
-                    const response = await fetch(form.action || window.location.href, {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'X-CSRFToken': csrftoken
-                        }
-                    });
-
-                    const data = await response.json();
-
-                    loading.style.display = 'none';
-
-                    if (data.error) {
-                        errorContainer.textContent = data.error;
-                        errorContainer.style.display = 'block';
-                    } else {
-                        // Exibe resposta
-                        responseContent.textContent = data.response;
-                        responseContainer.style.display = 'block';
-                    }
-                } catch (error) {
-                    loading.style.display = 'none';
-                    errorContainer.textContent = 'Erro ao processar a requisição: ' + error.message;
-                    errorContainer.style.display = 'block';
+        // Atualizar descrição ao mudar tipo de RAG
+        ragTypeInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                if (this.value === 'simple') {
+                    ragDescription.innerHTML = `
+                        <strong>RAG Simples:</strong> Busca os dados dinamicamente.
+                        Ideal para perguntas diretas sobre dados estruturados.
+                    `;
+                } else {
+                    ragDescription.innerHTML = `
+                        <strong>RAG com Embedding:</strong> Usa busca semântica.
+                        Ideal para perguntas complexas.
+                    `;
                 }
             });
         });
-    </script>
-</body>
-</html>
+
+        // Adicionar mensagem no chat
+        function addMessage(content, isUser = false, isError = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'message-user' : isError ? 'message-error' : 'message-assistant'}`;
+
+            if (!isUser && !isError) {
+                messageDiv.innerHTML = `
+                    <strong>Assistente IA</strong>
+                    <p style="margin-top: 0.5rem; white-space: pre-wrap;">${content}</p>
+                `;
+            } else if (isError) {
+                messageDiv.innerHTML = `
+                    <strong>Erro</strong>
+                    <p style="margin-top: 0.5rem;">${content}</p>
+                `;
+            } else {
+                messageDiv.innerHTML = `
+                    <strong>Você</strong>
+                    <p style="margin-top: 0.5rem;">${content}</p>
+                `;
+            }
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Adicionar loading indicator
+        function addLoadingMessage() {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'message message-assistant';
+            loadingDiv.id = 'loading-message';
+            loadingDiv.innerHTML = `
+                <div class="loading" style="padding: 0;">
+                    <div class="loading-spinner" style="width: 20px; height: 20px; border-width: 3px; margin-right: 0.5rem;"></div>
+                    <span>Processando sua pergunta...</span>
+                </div>
+            `;
+            chatMessages.appendChild(loadingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function removeLoadingMessage() {
+            const loadingMsg = document.getElementById('loading-message');
+            if (loadingMsg) {
+                loadingMsg.remove();
+            }
+        }
+
+        // Submit do formulário
+        chatForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const question = questionInput.value.trim();
+            if (!question) return;
+
+            const ragType = document.querySelector('input[name="rag-type"]:checked').value;
+            const endpoint = ragType === 'simple' ? '{% url "rag_query" %}' : '{% url "embedding_rag" %}';
+
+            // Adiciona mensagem do usuário
+            addMessage(question, true);
+
+            // Limpa input
+            questionInput.value = '';
+            questionInput.style.height = 'auto';
+
+            // Desabilita botão e mostra loading
+            sendBtn.disabled = true;
+            addLoadingMessage();
+
+            try {
+                const formData = new FormData();
+                formData.append('question', question);
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrftoken
+                    }
+                });
+
+                const data = await response.json();
+
+                removeLoadingMessage();
+
+                if (data.error) {
+                    addMessage(data.error, false, true);
+                } else {
+                    let responseText = data.response || 'Não foi possível gerar uma resposta.';
+
+                    // Adiciona informações extras para RAG simples
+                    if (ragType === 'simple' && data.db_query_performed) {
+                        responseText += '\n\n---\n📊 Consulta ao banco de dados realizada';
+                        if (data.tools_used && data.tools_used.length > 0) {
+                            responseText += '\n🔍 SQL: ' + data.tools_used.join(', ');
+                        }
+                    }
+
+                    addMessage(responseText);
+                }
+            } catch (error) {
+                removeLoadingMessage();
+                addMessage('Erro ao processar a requisição: ' + error.message, false, true);
+            } finally {
+                sendBtn.disabled = false;
+            }
+        });
+
+        // Enter para enviar (Shift+Enter para nova linha)
+        questionInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        });
+    });
+</script>
+{% endblock %}
