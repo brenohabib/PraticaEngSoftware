@@ -72,6 +72,8 @@ Você tem acesso à função `executar_consulta_sql(query: str)` que executa que
 5. Após executar a consulta e receber os dados, SEMPRE gere uma resposta textual clara
 6. Interprete os resultados e responda em linguagem natural
 7. Formate valores em R$ e datas em DD/MM/AAAA
+8. Sempre que necessário, busque as informações no banco de dados
+9. O cliente não precisa saber sobre a estrutura do banco
 ```
 """
 
