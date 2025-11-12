@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from ...agents.extraction.invoice_extractor import PDFExtractorAgent
 from ...agents.simple_rag import SimpleRAGAgent
-from .models.rag import query_semantic_rag
+from .models.rag import query_semantic_rag, query_semantic_rag_with_history
 from .services import process_extracted_invoice
 import json
 import os
@@ -56,11 +56,11 @@ def upload_pdf(request):
 def simple_rag(request):
     if request.method == 'POST':
         question = (request.POST.get('question') or '').strip()
+        session_id = request.POST.get('session_id')  # Recebe session_id do frontend
 
-        # Usa SimpleRAGAgent com Function Calling integrado
-        # O agente decide autonomamente se precisa consultar o banco de dados
+        # Usa SimpleRAGAgent com chat e histórico
         agent = SimpleRAGAgent()
-        result = agent.query(question=question)
+        result = agent.query_with_chat(question=question, session_id=session_id)
 
         return JsonResponse({
             'question': question,
@@ -68,6 +68,8 @@ def simple_rag(request):
             'tools_used': result.get('tools_used', []),
             'db_query_performed': result.get('db_query_performed', False),
             'error': result.get('error'),
+            'session_id': result.get('session_id'),  # Retorna session_id
+            'is_new_session': result.get('is_new_session', False)
         })
 
     context = {
@@ -79,26 +81,35 @@ def simple_rag(request):
 def embedding_rag_view(request):
     if request.method == 'POST':
         question = (request.POST.get('question') or '').strip()
+        session_id = request.POST.get('session_id')  # Recebe session_id do frontend
 
         if not question:
             return JsonResponse({'error': 'Nenhuma pergunta fornecida.'}, status=400)
 
         try:
-            answer = query_semantic_rag(question=question)
-            
+            # Usa o novo método com histórico
+            result = query_semantic_rag_with_history(
+                question=question,
+                session_id=session_id
+            )
+
             return JsonResponse({
                 'question': question,
-                'response': answer,
-                'error': None
+                'response': result.get('response'),
+                'error': result.get('error'),
+                'session_id': result.get('session_id'),
+                'is_new_session': result.get('is_new_session', False),
+                'transactions_found': result.get('transactions_found', 0)
             })
         except Exception as e:
             print(f"Erro na view embedding_rag_view: {e}")
             return JsonResponse({
                 'question': question,
                 'response': None,
-                'error': f'Erro interno no servidor ao processar o RAG com embedding: {str(e)}'
+                'error': f'Erro interno no servidor ao processar o RAG com embedding: {str(e)}',
+                'session_id': session_id
             }, status=500)
-            
+
     context = {
         'title': 'Assistente (RAG Semântico)',
         'subtitle': 'Busca inteligente com "super-contexto" e embeddings.'
