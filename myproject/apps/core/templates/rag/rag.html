@@ -42,6 +42,12 @@
         <strong>RAG Simples:</strong> Busca os dados dinamicamente.
         Ideal para perguntas diretas sobre dados estruturados.
     </div>
+
+    <div style="margin-top: 1rem; text-align: right;">
+        <button type="button" class="btn btn-secondary" id="new-chat-btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+            🔄 Nova Conversa
+        </button>
+    </div>
 </div>
 
 <!-- Container de chat -->
@@ -105,7 +111,26 @@
         const sendBtn = document.getElementById('send-btn');
         const ragTypeInputs = document.querySelectorAll('input[name="rag-type"]');
         const ragDescription = document.getElementById('rag-description');
+        const newChatBtn = document.getElementById('new-chat-btn');
         const csrftoken = getCookie('csrftoken');
+
+        // Gerenciamento de sessões
+        let sessionId = null;  // ID da sessão de chat atual
+        let currentRagType = 'simple';  // Tipo de RAG atual
+
+        // Função para resetar o chat
+        function resetChat() {
+            sessionId = null;
+            chatMessages.innerHTML = `
+                <div class="message message-assistant">
+                    <strong>Assistente IA</strong>
+                    <p style="margin-top: 0.5rem;">
+                        Olá! Como posso ajudar hoje?
+                    </p>
+                </div>
+            `;
+            console.log('💬 Chat resetado. Nova conversa iniciada.');
+        }
 
         // Auto-resize textarea
         questionInput.addEventListener('input', function() {
@@ -116,7 +141,9 @@
         // Atualizar descrição ao mudar tipo de RAG
         ragTypeInputs.forEach(input => {
             input.addEventListener('change', function() {
-                if (this.value === 'simple') {
+                const newRagType = this.value;
+
+                if (newRagType === 'simple') {
                     ragDescription.innerHTML = `
                         <strong>RAG Simples:</strong> Busca os dados dinamicamente.
                         Ideal para perguntas diretas sobre dados estruturados.
@@ -127,7 +154,18 @@
                         Ideal para perguntas complexas.
                     `;
                 }
+
+                // Se mudou o tipo de RAG, reseta a sessão
+                if (newRagType !== currentRagType) {
+                    currentRagType = newRagType;
+                    resetChat();
+                }
             });
+        });
+
+        // Botão "Nova Conversa"
+        newChatBtn.addEventListener('click', function() {
+            resetChat();
         });
 
         // Adicionar mensagem no chat
@@ -203,6 +241,14 @@
                 const formData = new FormData();
                 formData.append('question', question);
 
+                // Envia o session_id se existir
+                if (sessionId) {
+                    formData.append('session_id', sessionId);
+                    console.log(`📤 Enviando com sessão: ${sessionId}`);
+                } else {
+                    console.log('📤 Enviando sem sessão (será criada nova)');
+                }
+
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     body: formData,
@@ -221,12 +267,27 @@
                 } else {
                     let responseText = data.response || 'Não foi possível gerar uma resposta.';
 
+                    // Atualiza ou armazena o session_id
+                    if (data.session_id) {
+                        if (data.is_new_session) {
+                            console.log(`✨ Nova sessão criada: ${data.session_id}`);
+                        } else {
+                            console.log(`♻️ Sessão continuada: ${data.session_id}`);
+                        }
+                        sessionId = data.session_id;
+                    }
+
                     // Adiciona informações extras para RAG simples
                     if (ragType === 'simple' && data.db_query_performed) {
                         responseText += '\n\n---\n📊 Consulta ao banco de dados realizada';
                         if (data.tools_used && data.tools_used.length > 0) {
                             responseText += '\n🔍 SQL: ' + data.tools_used.join(', ');
                         }
+                    }
+
+                    // Adiciona informações extras para RAG embedding
+                    if (ragType === 'embedding' && data.transactions_found) {
+                        responseText += `\n\n---\n📄 ${data.transactions_found} transações encontradas`;
                     }
 
                     addMessage(responseText);

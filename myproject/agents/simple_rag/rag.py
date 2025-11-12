@@ -196,7 +196,7 @@ Você tem acesso à função `executar_consulta_sql(query: str)` que executa que
     def query_with_chat(self, question, session_id=None, max_retries=3, retry_delay=2):
         """
         Processa uma pergunta usando chat com histórico de contexto.
-        Mantém a conversa entre múltiplas mensagens.
+        Mantém a conversa entre múltiplas mensagens armazenando o histórico.
 
         Args:
             question (str): Pergunta do usuário
@@ -218,39 +218,53 @@ Você tem acesso à função `executar_consulta_sql(query: str)` que executa que
 
         def query_operation():
             tools_used = []
-            chat = None
+            history = []
             is_new_session = False
 
-            # 1. Recupera ou cria sessão de chat
+            # 1. Recupera histórico existente ou cria nova sessão
             if session_id:
                 session = chat_manager.get_session(session_id)
                 if session and session["agent_type"] == "simple":
-                    chat = session["chat"]
-                    self.logger.info(f"Usando sessão existente: {session_id}")
+                    history = session["chat"].get("history", [])
+                    self.logger.info(f"Usando sessão existente: {session_id} ({len(history)} mensagens)")
                 else:
                     self.logger.warning(f"Sessão inválida ou expirada: {session_id}")
+                    session_id_to_use = None
 
-            # Se não há chat válido, cria um novo
-            if not chat:
+            if not session_id or not history:
                 self.logger.info("Criando nova sessão de chat")
-                chat = self.client.chats.create(
-                    model=self.model_name,
-                    config=types.GenerateContentConfig(
-                        system_instruction=self.system_instruction,
-                        tools=[executar_consulta_sql],
-                    )
-                )
-                new_session_id = chat_manager.create_session(chat, agent_type="simple")
                 is_new_session = True
+                session_id_to_use = None
             else:
-                new_session_id = session_id
+                session_id_to_use = session_id
 
-            # 2. Envia mensagem com tools habilitadas
-            self.logger.info(f"Enviando pergunta: {question.strip()}")
-            response = chat.send_message(question.strip())
+            # 2. Prepara conteúdo com histórico
+            user_text = question.strip()
+            self.logger.info(f"Pergunta: {user_text}")
 
-            # 3. Processa function calls (se houver)
-            if hasattr(response, 'function_calls') and response.function_calls:
+            # Monta contents com histórico + nova mensagem
+            contents = []
+            for msg in history:
+                contents.append(msg)
+
+            # Adiciona nova pergunta do usuário
+            contents.append(types.Content(
+                role='user',
+                parts=[types.Part(text=user_text)]
+            ))
+
+            # 3. Primeira chamada com tools
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=self.system_instruction,
+                    tools=[executar_consulta_sql],
+                ),
+            )
+
+            # 4. Processa function calls se houver
+            if response.function_calls:
                 self.logger.info(f"Detectadas {len(response.function_calls)} function calls")
 
                 # Executa as funções
@@ -270,19 +284,24 @@ Você tem acesso à função `executar_consulta_sql(query: str)` que executa que
                         )
                     )
 
-                # Envia resultados das funções de volta ao chat
-                self.logger.info("Enviando resultados das funções para o chat")
+                # Adiciona resposta do modelo (com function calls) ao histórico
+                contents.append(response.candidates[0].content)
 
-                # Cria content com as respostas das funções
-                tool_content = types.Content(
-                    role='tool',
-                    parts=function_response_parts
+                # Adiciona respostas das funções
+                contents.append(types.Content(role='tool', parts=function_response_parts))
+
+                # Segunda chamada para gerar resposta final
+                self.logger.info("Enviando resultados para gerar resposta final")
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=self.system_instruction,
+                        tools=[executar_consulta_sql],
+                    ),
                 )
 
-                # Envia como mensagem para o chat continuar a conversa
-                response = chat.send_message(tool_content)
-
-            # 4. Extrai resposta final
+            # 5. Extrai resposta final
             response_text = None
             if hasattr(response, 'text') and response.text:
                 response_text = response.text.strip()
@@ -293,8 +312,26 @@ Você tem acesso à função `executar_consulta_sql(query: str)` que executa que
 
             self.logger.info(f"Resposta gerada: {response_text[:100]}...")
 
-            # 5. Atualiza contador de mensagens
-            chat_manager.increment_message_count(new_session_id)
+            # 6. Atualiza histórico com pergunta do usuário e resposta do modelo
+            # Adiciona mensagem do usuário
+            history.append(types.Content(
+                role='user',
+                parts=[types.Part(text=user_text)]
+            ))
+
+            # Adiciona resposta do modelo
+            history.append(response.candidates[0].content)
+
+            # 7. Salva ou atualiza sessão
+            if is_new_session:
+                session_data = {"history": history}
+                new_session_id = chat_manager.create_session(session_data, agent_type="simple")
+            else:
+                new_session_id = session_id_to_use
+                session = chat_manager.get_session(new_session_id)
+                if session:
+                    session["chat"]["history"] = history
+                    chat_manager.increment_message_count(new_session_id)
 
             return {
                 "response": response_text,
