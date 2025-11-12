@@ -5,10 +5,12 @@ Este módulo contém agentes baseados em Google Gemini para:
 - Extração de dados de PDFs (invoices/notas fiscais)
 - Consultas RAG (Retrieval-Augmented Generation)
 - Consultas ao banco de dados via LLM
+- Geração de embeddings para busca semântica
 """
 
 from .agent import BaseAgent
 from .extraction.invoice_extractor import PDFExtractorAgent
 from .simple_rag.rag import SimpleRAGAgent
+from .embedding.embedding_agent import EmbeddingAgent
 
-__all__ = ['BaseAgent', 'PDFExtractorAgent', 'SimpleRAGAgent']
+__all__ = ['BaseAgent', 'PDFExtractorAgent', 'SimpleRAGAgent', 'EmbeddingAgent']

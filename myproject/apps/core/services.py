@@ -6,73 +6,7 @@ from .models.classification import Classification
 from .models.account_transaction import AccountTransaction
 from .models.installment import Installment
 from .models.person import Person
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-import os
-
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
-
-def get_embedding(text: str) -> list[float]:
-    """Gera o embedding para um texto usando Google GenAI."""
-    if not text or text.strip() == 'Sem descrição':
-        print("Texto vazio ou 'Sem descrição', pulando embedding.")
-        return None
-    try:
-        embeddings_model = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004",
-            google_api_key=GEMINI_API_KEY)
-        return embeddings_model.embed_query(text)
-    except Exception as e:
-        print(f"Erro ao gerar embedding para '{text}': {e}")
-        return None
-
-def build_rich_text_for_embedding(data: dict, provider_name: str, invoiced_name: str, classifications: list) -> str:
-    """
-    Constrói um texto rico com TODOS os dados relevantes do JSON para gerar um embedding completo.
-    
-    Este texto será usado para:
-    1. Busca semântica (RAG)
-    2. Responder perguntas sobre fornecedores, valores, classificações, etc.
-    
-    Args:
-        data: Dicionário JSON extraído do PDF
-        provider_name: Nome do fornecedor
-        invoiced_name: Nome do faturado
-        classifications: Lista de objetos Classification
-    
-    Returns:
-        String formatada com contexto completo
-    """
-    
-    # Extrai informações do JSON
-    numero_nf = data.get('numero_nota_fiscal', 'S/N')
-    valor_total = data.get('valor_total', 0)
-    data_emissao = data.get('data_emissao', 'não informada')
-    produtos = data.get('descricao_produtos', [])
-    classificacoes_nomes = [c.descricao for c in classifications] if classifications else []
-    qtd_parcelas = data.get('quantidade_parcelas', 1)
-    data_vencimento = data.get('data_vencimento', 'não informada')
-    
-    # Montagem de texto rico estruturado
-    rich_text = f"""
-Nota Fiscal: {numero_nf}
-Fornecedor: {provider_name}
-Cliente/Faturado: {invoiced_name}
-Data de Emissão: {data_emissao}
-Valor Total: R$ {valor_total}
-Quantidade de Parcelas: {qtd_parcelas}
-Data de Vencimento: {data_vencimento}
-
-Produtos/Serviços:
-{' | '.join(produtos) if produtos else 'Não especificado'}
-
-Classificações/Categorias de Despesa:
-{', '.join(classificacoes_nomes) if classificacoes_nomes else 'Não especificado'}
-
-Tipo de Transação: A Pagar
-Status: Ativo
-""".strip()
-    
-    return rich_text
+from ...agents import EmbeddingAgent
 
 def parse_date(date_str):
     """Converte string DD/MM/AAAA para date object"""
@@ -182,7 +116,6 @@ def create_service_account(data: dict):
         
         print(f"Transação criada: #{account_transaction.id}")
         
-        # Create and search classification 
         classification_list = data.get('classificacao_despesa', [])
         classification_created = []
         
@@ -210,19 +143,24 @@ def create_service_account(data: dict):
         
         # Indexação de RAG para criar um contexto rico
         print("Gerando contexto rico para embedding...")
-        text_to_embed = build_rich_text_for_embedding(
+
+        # Inicializa o agente de embeddings
+        embedding_agent = EmbeddingAgent()
+
+        # Converte objetos Classification para lista de strings
+        classification_names = [c.descricao for c in classification_created]
+
+        # Gera embedding usando o agente
+        embedding_vector = embedding_agent.generate_transaction_embedding(
             data=data,
             provider_name=provider.razao_social,
             invoiced_name=invoiced.razao_social,
-            classifications=classification_created # Passa a lista de objetos
+            classifications=classification_names
         )
 
-        print(f"Contexto a ser indexado: \n{text_to_embed}")
-
-        embedding_vector = get_embedding(text_to_embed)
         if embedding_vector:
             account_transaction.descricao_embedding = embedding_vector
-            account_transaction.save(update_fields=['descricao_embedding']) 
+            account_transaction.save(update_fields=['descricao_embedding'])
             print(f"Embedding de Super-Contexto salvo para a transação #{account_transaction.id}")
         else:
             print(f"Falha ao gerar embedding para a transação #{account_transaction.id}")

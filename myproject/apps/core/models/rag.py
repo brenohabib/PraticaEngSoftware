@@ -2,8 +2,8 @@ from .account_transaction import AccountTransaction
 from .person import Person
 from .classification import Classification
 from .installment import Installment
-from ..services import get_embedding  
-from pgvector.django import L2Distance # Operador de distância de vetor do pgvector
+from ....agents import EmbeddingAgent
+from pgvector.django import L2Distance
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -31,10 +31,11 @@ def query_semantic_rag(question: str, top_k: int = 5) -> str:
     """
     
     print(f"\n Buscando por: '{question}'")
-    
-    # Gera embedding da pergunta do usuário
-    query_vector = get_embedding(question)
-    
+
+    # Gera embedding da pergunta do usuário usando EmbeddingAgent
+    embedding_agent = EmbeddingAgent()
+    query_vector = embedding_agent.generate_embedding(question)
+
     if query_vector is None:
         return "Não foi possível processar sua pergunta. Tente reformular."
     
