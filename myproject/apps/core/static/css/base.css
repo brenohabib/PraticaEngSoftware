@@ -177,6 +177,10 @@ body {
     padding: 2rem;
     max-width: 1200px;
     margin-right: auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100vh;
 }
 
 .page-header {
@@ -209,6 +213,98 @@ body {
     padding: 2rem;
     box-shadow: var(--shadow-md);
     margin-bottom: 1.5rem;
+}
+
+/* Overlay de configurações */
+.settings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.3s ease;
+}
+
+.settings-overlay.active {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Modal de configurações */
+.settings-modal {
+    background: var(--bg-primary);
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 2rem;
+    border-bottom: 2px solid var(--border-color);
+    background: linear-gradient(135deg, var(--primary-orange-pale) 0%, #fff 100%);
+    border-radius: 16px 16px 0 0;
+}
+
+.settings-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--text-primary);
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.75rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: color var(--transition-fast);
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.close-btn:hover {
+    color: var(--primary-orange);
+    background: var(--primary-orange-pale);
+}
+
+.settings-content {
+    padding: 2rem;
 }
 
 .card-header {
@@ -386,14 +482,18 @@ body {
     border-radius: 12px;
     box-shadow: var(--shadow-md);
     overflow: hidden;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .chat-messages {
     padding: 2rem;
-    min-height: 400px;
-    max-height: 600px;
+    flex: 1;
     overflow-y: auto;
     background: var(--bg-secondary);
+    min-height: 0;
 }
 
 .message {
@@ -526,6 +626,8 @@ body {
     .main-content {
         margin-left: 0;
         padding: 1rem;
+        height: auto;
+        min-height: 100vh;
     }
 
     .app-container {

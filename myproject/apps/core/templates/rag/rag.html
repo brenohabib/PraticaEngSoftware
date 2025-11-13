@@ -4,49 +4,58 @@
 
 {% block content %}
 
-<!-- Card de configuração do RAG -->
-<div class="card">
-    <div class="card-header">
-        <h2 class="card-title">Configurações do Assistente</h2>
-    </div>
+<!-- Barra de ações -->
+<div style="display: flex; justify-content: flex-end; gap: 1rem; margin-bottom: 1rem;">
+    <button type="button" id="new-chat-btn" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+        🔄
+    </button>
+    <button type="button" id="settings-btn" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+        ⚙️
+    </button>
+</div>
 
-    <div class="radio-group">
-        <div class="radio-option">
-            <input
-                type="radio"
-                id="rag-simple"
-                name="rag-type"
-                value="simple"
-                class="radio-input"
-                checked
-            >
-            <label for="rag-simple" class="radio-label">
-                <span>RAG Simples</span>
-            </label>
+<!-- Overlay de configurações -->
+<div id="settings-overlay" class="settings-overlay">
+    <div class="settings-modal">
+        <div class="settings-header">
+            <h2>Configurações do Assistente</h2>
+            <button type="button" id="close-settings-btn" class="close-btn">✕</button>
         </div>
-        <div class="radio-option">
-            <input
-                type="radio"
-                id="rag-embedding"
-                name="rag-type"
-                value="embedding"
-                class="radio-input"
-            >
-            <label for="rag-embedding" class="radio-label">
-                <span>RAG com Embedding</span>
-            </label>
+
+        <div class="settings-content">
+            <div class="radio-group">
+                <div class="radio-option">
+                    <input
+                        type="radio"
+                        id="rag-simple"
+                        name="rag-type"
+                        value="simple"
+                        class="radio-input"
+                        checked
+                    >
+                    <label for="rag-simple" class="radio-label">
+                        <span>RAG Simples</span>
+                    </label>
+                </div>
+                <div class="radio-option">
+                    <input
+                        type="radio"
+                        id="rag-embedding"
+                        name="rag-type"
+                        value="embedding"
+                        class="radio-input"
+                    >
+                    <label for="rag-embedding" class="radio-label">
+                        <span>RAG com Embedding</span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="rag-description" class="message message-info" style="margin-top: 1.5rem;">
+                <strong>RAG Simples:</strong> Busca os dados dinamicamente.
+                Ideal para perguntas diretas sobre dados estruturados.
+            </div>
         </div>
-    </div>
-
-    <div id="rag-description" class="message message-info">
-        <strong>RAG Simples:</strong> Busca os dados dinamicamente.
-        Ideal para perguntas diretas sobre dados estruturados.
-    </div>
-
-    <div style="margin-top: 1rem; text-align: right;">
-        <button type="button" class="btn btn-secondary" id="new-chat-btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-            🔄 Nova Conversa
-        </button>
     </div>
 </div>
 
@@ -66,7 +75,7 @@
     <div class="chat-input-container">
         <form id="chat-form">
             {% csrf_token %}
-            <div style="display: flex; gap: 1rem; align-items: flex-end;">
+            <div style="display: flex; gap: 1rem; align-items: center;">
                 <div style="flex: 1;">
                     <textarea
                         id="question-input"
@@ -112,6 +121,9 @@
         const ragTypeInputs = document.querySelectorAll('input[name="rag-type"]');
         const ragDescription = document.getElementById('rag-description');
         const newChatBtn = document.getElementById('new-chat-btn');
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsOverlay = document.getElementById('settings-overlay');
+        const closeSettingsBtn = document.getElementById('close-settings-btn');
         const csrftoken = getCookie('csrftoken');
 
         // Gerenciamento de sessões
@@ -136,6 +148,30 @@
         questionInput.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // Abrir configurações
+        settingsBtn.addEventListener('click', function() {
+            settingsOverlay.classList.add('active');
+        });
+
+        // Fechar configurações
+        closeSettingsBtn.addEventListener('click', function() {
+            settingsOverlay.classList.remove('active');
+        });
+
+        // Fechar ao clicar fora do modal
+        settingsOverlay.addEventListener('click', function(e) {
+            if (e.target === settingsOverlay) {
+                settingsOverlay.classList.remove('active');
+            }
+        });
+
+        // Fechar com tecla ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && settingsOverlay.classList.contains('active')) {
+                settingsOverlay.classList.remove('active');
+            }
         });
 
         // Atualizar descrição ao mudar tipo de RAG
