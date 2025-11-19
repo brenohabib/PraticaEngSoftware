@@ -216,70 +216,27 @@ def create_service_account(data: dict):
 
 def process_extracted_invoice(data: dict):
     """
-     - Verifica se fornecedor, faturado e classificações existem
-     - Cria novos cadastros se necessário
-     - Chama create_service_account para criar o movimento e as parcelas
-     - Retorna relatório de verificações e sucesso ou falha
+    Processa dados extraídos de uma nota fiscal e salva no banco de dados.
+
+    Args:
+        data: Dicionário com dados extraídos do PDF
+
+    Returns:
+        dict: Resultado com 'success' (bool), dados da transação ou 'error' (str)
     """
-    mensagens = []
     try:
-        # Verify provider
-        provider_data = data.get('fornecedor', {})
-        provider_doc = normalize_document(provider_data.get('cnpj'))
-        provider_razao = safe_strip(provider_data.get('razao_social'))
-        
-        provider = Person.objects.filter(documento=provider_doc).first()
-        if provider:
-            mensagens.append(f"FORNECEDOR: {provider_razao} - EXISTE (ID: {provider.id})")
-        else:
-            mensagens.append(f"FORNECEDOR: {provider_razao} - NÃO EXISTE (será criado)")
-        
-        # Verify invoiced
-        invoiced_data = data.get('faturado', {})
-        invoiced_doc = normalize_document(invoiced_data.get('cpf_cnpj'))
-        invoiced_nome = safe_strip(invoiced_data.get('nome_completo'))
-        
-        invoiced = Person.objects.filter(documento=invoiced_doc).first()
-        if invoiced:
-            mensagens.append(f"FATURADO: {invoiced_nome} - EXISTE (ID: {invoiced.id})")
-        else:
-            mensagens.append(f"FATURADO: {invoiced_nome} - NÃO EXISTE (será criado)")
-        
-        # Verify and create classifications
-        classification_list = data.get('classificacao_despesa', [])
-        
-        for c in classification_list:
-            c = safe_strip(c)
-            if not c:
-                continue
-            
-            classification = Classification.objects.filter(descricao__iexact=c).first()
-            if classification:
-                mensagens.append(f"DESPESA: {c} - EXISTE (ID: {classification.id})")
-            else:
-                mensagens.append(f"DESPESA: {c} - NÃO EXISTE (será criada)")
-        
-        # Create transactions and installments (dentro de uma transação atômica)
         with transaction.atomic():
             result = create_service_account(data)
-            
-            # Se houve erro na criação, retorna o erro
+
             if not result.get('success'):
-                mensagens.append(f"Erro ao criar registro: {result.get('error')}")
                 return {
                     "success": False,
-                    "mensagens": mensagens,
                     "error": result.get('error')
                 }
-            
-            mensagens.append("Registro de movimento criado com sucesso.")
-        
-        result['mensagens'] = mensagens
-        return result
-    
+
+            return result
+
     except ValidationError as e:
-        mensagens.append(f"Erro de validação: {str(e)}")
-        return {"success": False, "mensagens": mensagens, "error": str(e)}
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        mensagens.append(f"Erro inesperado: {str(e)}")
-        return {"success": False, "mensagens": mensagens, "error": str(e)}
+        return {"success": False, "error": f"Erro inesperado: {str(e)}"}

@@ -25,26 +25,27 @@ def upload_pdf(request):
             extractor_agent = PDFExtractorAgent()
             extracted_data = extractor_agent.extract_pdf_to_json(temp_path)
 
+            # Verifica se houve erro na extração
+            if isinstance(extracted_data, dict) and extracted_data.get('error'):
+                raise Exception(extracted_data['error'])
+
             # Valida e salva dados no banco de dados
             result = process_extracted_invoice(extracted_data)
 
-            # === 3. Mostra o relatório de verificação ===
-            for line in result.get("mensagens", []):
-                messages.info(request, line)
-
             if result.get("success"):
-                messages.success(request, f"Registro criado com sucesso! "
-                                          f"Nota: {result['numero_nota_fiscal']} | "
-                                          f"Fornecedor: {result['fornecedor']} | "
-                                          f"Valor Total: R$ {result['valor_total']:.2f}")
+                messages.success(
+                    request,
+                    f"Nota fiscal {result['numero_nota_fiscal']} registrada com sucesso. "
+                    f"Valor: R$ {result['valor_total']:.2f}"
+                )
             else:
-                messages.error(request, f"Erro ao salvar: {result.get('error')}")
+                messages.error(request, result.get('error', 'Erro desconhecido ao salvar'))
 
             # Converte o resultado para JSON formatado
             context['json_result'] = json.dumps(extracted_data, indent=2, ensure_ascii=False)
-            messages.success(request, f'Arquivo "{pdf_file.name}" processado com sucesso!')
+
         except Exception as e:
-            messages.error(request, f'Erro ao processar o arquivo: {str(e)}')
+            messages.error(request, str(e))
         finally:
             # Remove o arquivo temporário
             if os.path.exists(temp_path):
