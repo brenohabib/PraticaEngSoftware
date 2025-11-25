@@ -1,13 +1,23 @@
 from django.shortcuts import render
 from django.contrib import messages
 from django.http import JsonResponse
+from django.shortcuts import render, redirect
+from django.conf import settings
+from django.db import transaction
 from ...agents.extraction.invoice_extractor import PDFExtractorAgent
 from ...agents.simple_rag import SimpleRAGAgent
+from ...agents.embedding.embedding_agent import EmbeddingAgent
 from .models.rag import query_semantic_rag, query_semantic_rag_with_history
+from .models.person import Person
+from .models.classification import Classification
+from .models.account_transaction import AccountTransaction
+from .models.installment import Installment
+from .forms import PersonForm, ClassificationForm, TransactionForm
 from .services import process_extracted_invoice
+from decimal import Decimal
+from datetime import timedelta
 import json
 import os
-from django.conf import settings
 
 def upload_pdf(request):
     context = {}
@@ -52,7 +62,6 @@ def upload_pdf(request):
                 os.remove(temp_path)
                 
     return render(request, 'upload/upload.html', context)
-
 
 def simple_rag(request):
     if request.method == 'POST':
@@ -116,3 +125,121 @@ def embedding_rag_view(request):
         'subtitle': 'Busca inteligente com "super-contexto" e embeddings.'
     }
     return render(request, 'rag/rag.html', context)
+
+def manual_registration(request):
+    # Inicializa os formulários vazios
+    person_form = PersonForm()
+    classification_form = ClassificationForm()
+    transaction_form = TransactionForm()
+    
+    active_tab = 'person' # Aba padrão
+
+    if request.method == 'POST':
+        form_type = request.POST.get('form_type')
+        
+        if form_type == 'person':
+            active_tab = 'person'
+            person_form = PersonForm(request.POST)
+            if person_form.is_valid():
+                person_form.save()
+                messages.success(request, 'Pessoa cadastrada com sucesso!')
+                return redirect('manual_registration')
+            else:
+                messages.error(request, 'Erro ao cadastrar pessoa. Verifique os campos.')
+                
+        elif form_type == 'classification':
+            active_tab = 'classification'
+            classification_form = ClassificationForm(request.POST)
+            if classification_form.is_valid():
+                classification_form.save()
+                messages.success(request, 'Classificação cadastrada com sucesso!')
+                return redirect('manual_registration')
+            else:
+                messages.error(request, 'Erro ao cadastrar classificação.')
+                
+        elif form_type == 'transaction':
+            active_tab = 'transaction'
+            transaction_form = TransactionForm(request.POST)
+            
+            if transaction_form.is_valid():
+                try:
+                    # Uso do transaction.atomic() requer "from django.db import transaction"
+                    with transaction.atomic():
+                        # 1. Salva a transação principal
+                        account_transaction = transaction_form.save()
+                        
+                        # 2. Lógica de Parcelas
+                        qtd_parcelas = transaction_form.cleaned_data['quantidade_parcelas']
+                        data_primeiro_vencimento = transaction_form.cleaned_data['primeiro_vencimento']
+                        valor_total = account_transaction.valor_total
+                        
+                        valor_parcela = valor_total / qtd_parcelas
+                        
+                        for i in range(1, qtd_parcelas + 1):
+                            # Calcula vencimento (adiciona 30 dias para cada parcela subsequente)
+                            data_venc = data_primeiro_vencimento + timedelta(days=30 * (i - 1))
+                            
+                            Installment.objects.create(
+                                account_transaction=account_transaction,
+                                identificacao=f"{i}/{qtd_parcelas}",
+                                data_vencimento=data_venc,
+                                valor_parcela=valor_parcela,
+                                valor_saldo=valor_parcela, # Saldo inicial igual ao valor
+                                status_parcela='aberta'
+                            )
+
+                        # 3. Indexação RAG (Criar Embedding)
+                        # Prepara dados mockados para o agente de embedding
+                        mock_data = {
+                            'numero_nota_fiscal': account_transaction.numero_nota_fiscal,
+                            'valor_total': float(account_transaction.valor_total),
+                            'data_emissao': str(account_transaction.data_emissao),
+                            'data_vencimento': str(data_primeiro_vencimento),
+                            'quantidade_parcelas': qtd_parcelas,
+                            'descricao_produtos': [account_transaction.descricao]
+                        }
+                        
+                        # Pega os nomes das classificações selecionadas
+                        classification_names = [c.descricao for c in account_transaction.classificacoes.all()]
+
+                        embedding_agent = EmbeddingAgent()
+                        embedding_vector = embedding_agent.generate_transaction_embedding(
+                            data=mock_data,
+                            provider_name=account_transaction.fornecedor_cliente.razao_social,
+                            invoiced_name=account_transaction.faturado.razao_social,
+                            classifications=classification_names
+                        )
+
+                        if embedding_vector:
+                            account_transaction.descricao_embedding = embedding_vector
+                            account_transaction.save(update_fields=['descricao_embedding'])
+
+                        messages.success(request, f'Conta cadastrada com {qtd_parcelas} parcelas!')
+                        return redirect('manual_registration')
+
+                except Exception as e:
+                    # O rollback acontece automaticamente aqui se der erro
+                    messages.error(request, f'Erro ao processar transação: {str(e)}')
+            else:
+                messages.error(request, 'Erro ao cadastrar conta. Verifique os campos obrigatórios.')
+
+    context = {
+        'person_form': person_form,
+        'classification_form': classification_form,
+        'transaction_form': transaction_form,
+        'active_tab': active_tab
+    }
+    return render(request, 'registration/manual_registration.html', context)
+
+def view_registrations(request):
+    # Busca simples de todos os dados
+    people = Person.objects.all().order_by('-id')[:50]
+    classifications = Classification.objects.all().order_by('tipo', 'descricao')
+    transactions = AccountTransaction.objects.all().order_by('-data_emissao')[:50]
+    
+    context = {
+        'people': people,
+        'classifications': classifications,
+        'transactions': transactions
+    }
+    return render(request, 'registration/view_registrations.html', context)

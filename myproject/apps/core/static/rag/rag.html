@@ -1,0 +1,312 @@
+{% extends 'base.html' %}
+
+{% block title %}Assistente IA - FinanceAI{% endblock %}
+
+{% block content %}
+
+<!-- Card de configuração do RAG -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Configurações do Assistente</h2>
+    </div>
+
+    <div class="radio-group">
+        <div class="radio-option">
+            <input
+                type="radio"
+                id="rag-simple"
+                name="rag-type"
+                value="simple"
+                class="radio-input"
+                checked
+            >
+            <label for="rag-simple" class="radio-label">
+                <span>RAG Simples</span>
+            </label>
+        </div>
+        <div class="radio-option">
+            <input
+                type="radio"
+                id="rag-embedding"
+                name="rag-type"
+                value="embedding"
+                class="radio-input"
+            >
+            <label for="rag-embedding" class="radio-label">
+                <span>RAG com Embedding</span>
+            </label>
+        </div>
+    </div>
+
+    <div id="rag-description" class="message message-info">
+        <strong>RAG Simples:</strong> Busca os dados dinamicamente.
+        Ideal para perguntas diretas sobre dados estruturados.
+    </div>
+
+    <div style="margin-top: 1rem; text-align: right;">
+        <button type="button" class="btn btn-secondary" id="new-chat-btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+            🔄 Nova Conversa
+        </button>
+    </div>
+</div>
+
+<!-- Container de chat -->
+<div class="chat-container">
+    <!-- Área de mensagens -->
+    <div class="chat-messages" id="chat-messages">
+        <div class="message message-assistant">
+            <strong>Assistente IA</strong>
+            <p style="margin-top: 0.5rem;">
+                Olá! Como posso ajudar hoje?
+            </p>
+        </div>
+    </div>
+
+    <!-- Área de input -->
+    <div class="chat-input-container">
+        <form id="chat-form">
+            {% csrf_token %}
+            <div style="display: flex; gap: 1rem; align-items: flex-end;">
+                <div style="flex: 1;">
+                    <textarea
+                        id="question-input"
+                        name="question"
+                        class="prompt-input"
+                        placeholder="Digite sua pergunta aqui... (Ex: Quais parcelas estão em aberto? Qual o total por classificação?)"
+                        rows="1"
+                        required
+                    ></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" id="send-btn">
+                    Enviar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const chatForm = document.getElementById('chat-form');
+        const questionInput = document.getElementById('question-input');
+        const chatMessages = document.getElementById('chat-messages');
+        const sendBtn = document.getElementById('send-btn');
+        const ragTypeInputs = document.querySelectorAll('input[name="rag-type"]');
+        const ragDescription = document.getElementById('rag-description');
+        const newChatBtn = document.getElementById('new-chat-btn');
+        const csrftoken = getCookie('csrftoken');
+
+        // Gerenciamento de sessões
+        let sessionId = null;  // ID da sessão de chat atual
+        let currentRagType = 'simple';  // Tipo de RAG atual
+
+        // Função para resetar o chat
+        function resetChat() {
+            sessionId = null;
+            chatMessages.innerHTML = `
+                <div class="message message-assistant">
+                    <strong>Assistente IA</strong>
+                    <p style="margin-top: 0.5rem;">
+                        Olá! Como posso ajudar hoje?
+                    </p>
+                </div>
+            `;
+            console.log('💬 Chat resetado. Nova conversa iniciada.');
+        }
+
+        // Auto-resize textarea
+        questionInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // Atualizar descrição ao mudar tipo de RAG
+        ragTypeInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                const newRagType = this.value;
+
+                if (newRagType === 'simple') {
+                    ragDescription.innerHTML = `
+                        <strong>RAG Simples:</strong> Busca os dados dinamicamente.
+                        Ideal para perguntas diretas sobre dados estruturados.
+                    `;
+                } else {
+                    ragDescription.innerHTML = `
+                        <strong>RAG com Embedding:</strong> Usa busca semântica.
+                        Ideal para perguntas complexas.
+                    `;
+                }
+
+                // Se mudou o tipo de RAG, reseta a sessão
+                if (newRagType !== currentRagType) {
+                    currentRagType = newRagType;
+                    resetChat();
+                }
+            });
+        });
+
+        // Botão "Nova Conversa"
+        newChatBtn.addEventListener('click', function() {
+            resetChat();
+        });
+
+        // Adicionar mensagem no chat
+        function addMessage(content, isUser = false, isError = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'message-user' : isError ? 'message-error' : 'message-assistant'}`;
+
+            if (!isUser && !isError) {
+                messageDiv.innerHTML = `
+                    <strong>Assistente IA</strong>
+                    <p style="margin-top: 0.5rem; white-space: pre-wrap;">${content}</p>
+                `;
+            } else if (isError) {
+                messageDiv.innerHTML = `
+                    <strong>Erro</strong>
+                    <p style="margin-top: 0.5rem;">${content}</p>
+                `;
+            } else {
+                messageDiv.innerHTML = `
+                    <strong>Você</strong>
+                    <p style="margin-top: 0.5rem;">${content}</p>
+                `;
+            }
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Adicionar loading indicator
+        function addLoadingMessage() {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'message message-assistant';
+            loadingDiv.id = 'loading-message';
+            loadingDiv.innerHTML = `
+                <div class="loading" style="padding: 0;">
+                    <div class="loading-spinner" style="width: 20px; height: 20px; border-width: 3px; margin-right: 0.5rem;"></div>
+                    <span>Processando sua pergunta...</span>
+                </div>
+            `;
+            chatMessages.appendChild(loadingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function removeLoadingMessage() {
+            const loadingMsg = document.getElementById('loading-message');
+            if (loadingMsg) {
+                loadingMsg.remove();
+            }
+        }
+
+        // Submit do formulário
+        chatForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const question = questionInput.value.trim();
+            if (!question) return;
+
+            const ragType = document.querySelector('input[name="rag-type"]:checked').value;
+            const endpoint = ragType === 'simple' ? '{% url "rag_query" %}' : '{% url "embedding_rag" %}';
+
+            // Adiciona mensagem do usuário
+            addMessage(question, true);
+
+            // Limpa input
+            questionInput.value = '';
+            questionInput.style.height = 'auto';
+
+            // Desabilita botão e mostra loading
+            sendBtn.disabled = true;
+            addLoadingMessage();
+
+            try {
+                const formData = new FormData();
+                formData.append('question', question);
+
+                // Envia o session_id se existir
+                if (sessionId) {
+                    formData.append('session_id', sessionId);
+                    console.log(`📤 Enviando com sessão: ${sessionId}`);
+                } else {
+                    console.log('📤 Enviando sem sessão (será criada nova)');
+                }
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrftoken
+                    }
+                });
+
+                const data = await response.json();
+
+                removeLoadingMessage();
+
+                if (data.error) {
+                    addMessage(data.error, false, true);
+                } else {
+                    let responseText = data.response || 'Não foi possível gerar uma resposta.';
+
+                    // Atualiza ou armazena o session_id
+                    if (data.session_id) {
+                        if (data.is_new_session) {
+                            console.log(`✨ Nova sessão criada: ${data.session_id}`);
+                        } else {
+                            console.log(`♻️ Sessão continuada: ${data.session_id}`);
+                        }
+                        sessionId = data.session_id;
+                    }
+
+                    // Adiciona informações extras para RAG simples
+                    if (ragType === 'simple' && data.db_query_performed) {
+                        responseText += '\n\n---\n📊 Consulta ao banco de dados realizada';
+                        if (data.tools_used && data.tools_used.length > 0) {
+                            responseText += '\n🔍 SQL: ' + data.tools_used.join(', ');
+                        }
+                    }
+
+                    // Adiciona informações extras para RAG embedding
+                    if (ragType === 'embedding' && data.transactions_found) {
+                        responseText += `\n\n---\n📄 ${data.transactions_found} transações encontradas`;
+                    }
+
+                    addMessage(responseText);
+                }
+            } catch (error) {
+                removeLoadingMessage();
+                addMessage('Erro ao processar a requisição: ' + error.message, false, true);
+            } finally {
+                sendBtn.disabled = false;
+            }
+        });
+
+        // Enter para enviar (Shift+Enter para nova linha)
+        questionInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        });
+    });
+</script>
+{% endblock %}

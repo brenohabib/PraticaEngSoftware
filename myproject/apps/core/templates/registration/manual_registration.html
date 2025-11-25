@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+
+{% block title %}Cadastro Manual - FinanceAI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Cadastro Manual</h1>
+    <p class="page-subtitle">Selecione o tipo de registro que deseja adicionar ao sistema.</p>
+</div>
+
+<div class="card">
+    <!-- Dropdown de Seleção -->
+    <div class="form-group">
+        <label class="form-label">O que você deseja cadastrar?</label>
+        <select id="form-selector" class="form-select">
+            <option value="person" {% if active_tab == 'person' %}selected{% endif %}>Pessoa (Fornecedor/Faturado)</option>
+            <option value="classification" {% if active_tab == 'classification' %}selected{% endif %}>Classificação</option>
+            <option value="transaction" {% if active_tab == 'transaction' %}selected{% endif %}>Conta (A Pagar/Receber)</option>
+        </select>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="message {% if message.tags == 'error' %}message-error{% else %}message-success{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 2rem 0;">
+
+    <!-- Formulário Pessoa -->
+    <div id="form-person" class="form-section">
+        <h3 class="card-title mb-3">Cadastrar Pessoa</h3>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="person">
+            
+            <div class="form-group">
+                <label class="form-label">Tipo</label>
+                {{ person_form.tipo }}
+            </div>
+            <div class="radio-group">
+                <div style="flex: 1;">
+                    <label class="form-label">Razão Social</label>
+                    {{ person_form.razao_social }}
+                </div>
+                <div style="flex: 1;">
+                    <label class="form-label">Nome Fantasia</label>
+                    {{ person_form.fantasia }}
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Documento (CPF/CNPJ)</label>
+                {{ person_form.documento }}
+            </div>
+            <button type="submit" class="btn btn-primary">Salvar Pessoa</button>
+        </form>
+    </div>
+
+    <!-- Formulário Classificação -->
+    <div id="form-classification" class="form-section hidden">
+        <h3 class="card-title mb-3">Cadastrar Classificação</h3>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="classification">
+            
+            <div class="form-group">
+                <label class="form-label">Tipo (receita/despesa)</label>
+                {{ classification_form.tipo }}
+            </div>
+            <div class="form-group">
+                <label class="form-label">Descrição</label>
+                {{ classification_form.descricao }}
+            </div>
+            <button type="submit" class="btn btn-primary">Salvar Classificação</button>
+        </form>
+    </div>
+
+    <!-- Formulário Contas -->
+    <div id="form-transaction" class="form-section hidden">
+        <h3 class="card-title mb-3">Cadastrar Conta</h3>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="transaction">
+            
+            <div class="form-group">
+                <label class="form-label">Tipo</label>
+                {{ transaction_form.tipo }}
+            </div>
+
+            <div class="radio-group">
+                <div style="flex: 1;">
+                    <label class="form-label">Nº Nota Fiscal</label>
+                    {{ transaction_form.numero_nota_fiscal }}
+                </div>
+                <div style="flex: 1;">
+                    <label class="form-label">Valor Total (R$)</label>
+                    {{ transaction_form.valor_total }}
+                </div>
+            </div>
+
+            <!-- SEÇÃO DE DATAS E PARCELAS -->
+            <div class="radio-group" style="background-color: var(--bg-secondary); padding: 1rem; border-radius: 8px;">
+                <div style="flex: 1;">
+                    <label class="form-label">Data de Emissão</label>
+                    {{ transaction_form.data_emissao }}
+                </div>
+                <div style="flex: 1;">
+                    <label class="form-label">Vencimento (1ª Parcela)</label>
+                    {{ transaction_form.primeiro_vencimento }}
+                </div>
+                <div style="flex: 0 0 150px;">
+                    <label class="form-label">Qtd. Parcelas</label>
+                    {{ transaction_form.quantidade_parcelas }}
+                </div>
+            </div>
+
+            <div class="radio-group">
+                <div style="flex: 1;">
+                    <label class="form-label">Fornecedor</label>
+                    {{ transaction_form.fornecedor_cliente }}
+                </div>
+                <div style="flex: 1;">
+                    <label class="form-label">Cliente/Faturado</label>
+                    {{ transaction_form.faturado }}
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Classificações (Segure Ctrl para selecionar várias)</label>
+                {{ transaction_form.classificacoes }}
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Descrição</label>
+                {{ transaction_form.descricao }}
+            </div>
+
+            <button type="submit" class="btn btn-primary">Salvar Conta e Gerar Parcelas</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const selector = document.getElementById('form-selector');
+        const sections = {
+            'person': document.getElementById('form-person'),
+            'classification': document.getElementById('form-classification'),
+            'transaction': document.getElementById('form-transaction')
+        };
+
+        function showSection(value) {
+            Object.values(sections).forEach(el => el.classList.add('hidden'));
+            if (sections[value]) {
+                sections[value].classList.remove('hidden');
+            }
+        }
+
+        selector.addEventListener('change', function() {
+            showSection(this.value);
+        });
+
+        showSection(selector.value);
+    });
+</script>
+{% endblock %}

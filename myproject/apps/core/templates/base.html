@@ -26,6 +26,12 @@
                     <a href="{% url 'rag_query' %}" class="nav-link {% if request.resolver_match.url_name == 'rag_query' %}active{% endif %}">
                         <span>Assistente IA</span>
                     </a>
+                    <a href="{% url 'manual_registration' %}" class="nav-link {% if request.resolver_match.url_name == 'manual_registration' %}active{% endif %}">
+                        <span>Cadastrar Manualmente</span>
+                    </a>
+                    <a href="{% url 'view_cadastros' %}" class="nav-link {% if request.resolver_match.url_name == 'view_cadastros' %}active{% endif %}">
+                        <span>Visualizar Cadastros</span>
+                    </a>
                 </div>
 
                 <div class="nav-section">
