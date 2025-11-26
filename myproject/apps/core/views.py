@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q 
+from django.db.models import Q
 from django.views.decorators.http import require_http_methods
 from django.shortcuts import render, redirect, get_object_or_404
 from ...agents.extraction.invoice_extractor import PDFExtractorAgent
@@ -21,6 +21,10 @@ from decimal import Decimal
 from datetime import timedelta
 import json
 import os
+
+def home(request):
+    """View da página inicial"""
+    return render(request, 'home.html')
 
 def upload_pdf(request):
     context = {}

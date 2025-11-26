@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+
+{% block title %}Início - FinanceAI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Bem-vindo ao FinanceAI</h1>
+    <p class="page-subtitle">
+        Sistema inteligente de gestão financeira com processamento automatizado de notas fiscais
+    </p>
+</div>
+
+<!-- Sobre o Sistema -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Sobre o Sistema</h2>
+    </div>
+    <div style="padding: 1.5rem;">
+        <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem;">
+            O FinanceAI é uma plataforma de gestão financeira que utiliza Inteligência Artificial (Google Gemini)
+            para automatizar a extração de dados de notas fiscais e facilitar o controle de transações financeiras.
+        </p>
+        <p style="color: var(--text-secondary); line-height: 1.6;">
+            Com recursos avançados de processamento de documentos e assistente inteligente, você pode gerenciar
+            suas finanças de forma rápida, precisa e eficiente.
+        </p>
+    </div>
+</div>
+
+<!-- Funcionalidades -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Funcionalidades Principais</h2>
+    </div>
+    <div style="padding: 1.5rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+
+            <!-- Importar PDF -->
+            <div style="border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem;">
+                <h3 style="color: var(--primary); margin-bottom: 0.75rem; font-size: 1.125rem;">
+                    Importar Nota Fiscal
+                </h3>
+                <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem;">
+                    Faça upload de PDFs de notas fiscais e deixe a IA extrair automaticamente todos os dados:
+                </p>
+                <ul style="color: var(--text-secondary); line-height: 1.8; margin-left: 1.5rem;">
+                    <li>Dados do fornecedor e cliente</li>
+                    <li>Valores e datas</li>
+                    <li>Classificações de despesas</li>
+                    <li>Parcelas e forma de pagamento</li>
+                </ul>
+                <a href="{% url 'upload_pdf' %}" class="btn btn-primary" style="margin-top: 1rem; display: inline-block;">
+                    Acessar
+                </a>
+            </div>
+
+            <!-- Assistente IA -->
+            <div style="border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem;">
+                <h3 style="color: var(--primary); margin-bottom: 0.75rem; font-size: 1.125rem;">
+                    Assistente IA
+                </h3>
+                <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem;">
+                    Converse com o assistente inteligente para consultar informações financeiras:
+                </p>
+                <ul style="color: var(--text-secondary); line-height: 1.8; margin-left: 1.5rem;">
+                    <li>Consultas em linguagem natural</li>
+                    <li>Análises de transações</li>
+                    <li>Relatórios personalizados</li>
+                    <li>Histórico de conversas</li>
+                </ul>
+                <a href="{% url 'rag_query' %}" class="btn btn-primary" style="margin-top: 1rem; display: inline-block;">
+                    Acessar
+                </a>
+            </div>
+
+            <!-- Cadastro Manual -->
+            <div style="border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem;">
+                <h3 style="color: var(--primary); margin-bottom: 0.75rem; font-size: 1.125rem;">
+                    Cadastro Manual
+                </h3>
+                <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem;">
+                    Registre manualmente suas transações financeiras:
+                </p>
+                <ul style="color: var(--text-secondary); line-height: 1.8; margin-left: 1.5rem;">
+                    <li>Cadastro de pessoas (fornecedor/cliente)</li>
+                    <li>Classificações de receitas/despesas</li>
+                    <li>Transações a pagar/receber</li>
+                    <li>Geração automática de parcelas</li>
+                </ul>
+                <a href="{% url 'manual_registration' %}" class="btn btn-primary" style="margin-top: 1rem; display: inline-block;">
+                    Acessar
+                </a>
+            </div>
+
+            <!-- Visualizar Cadastros -->
+            <div style="border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem;">
+                <h3 style="color: var(--primary); margin-bottom: 0.75rem; font-size: 1.125rem;">
+                    Visualizar Cadastros
+                </h3>
+                <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem;">
+                    Gerencie todos os registros do sistema:
+                </p>
+                <ul style="color: var(--text-secondary); line-height: 1.8; margin-left: 1.5rem;">
+                    <li>Busca e filtros avançados</li>
+                    <li>Edição de registros</li>
+                    <li>Exclusão lógica (soft delete)</li>
+                    <li>Visualização detalhada</li>
+                </ul>
+                <a href="{% url 'view_cadastros' %}" class="btn btn-primary" style="margin-top: 1rem; display: inline-block;">
+                    Acessar
+                </a>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- Começar a usar -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Como Começar</h2>
+    </div>
+    <div style="padding: 1.5rem;">
+        <ol style="color: var(--text-secondary); line-height: 2; margin-left: 1.5rem;">
+            <li>
+                <strong style="color: var(--text-primary);">Importe suas notas fiscais:</strong>
+                Faça upload de PDFs para extração automática de dados
+            </li>
+            <li>
+                <strong style="color: var(--text-primary);">Configure classificações:</strong>
+                Cadastre categorias de receitas e despesas para organização
+            </li>
+            <li>
+                <strong style="color: var(--text-primary);">Registre transações:</strong>
+                Use o cadastro manual para adicionar movimentações financeiras
+            </li>
+            <li>
+                <strong style="color: var(--text-primary);">Consulte com IA:</strong>
+                Utilize o assistente para análises e relatórios inteligentes
+            </li>
+        </ol>
+
+        <div style="margin-top: 2rem; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px; border-left: 4px solid var(--primary);">
+            <h4 style="color: var(--text-primary); margin-bottom: 0.5rem;">Dica:</h4>
+            <p style="color: var(--text-secondary); line-height: 1.6; margin: 0;">
+                Use a navegação lateral para acessar rapidamente todas as funcionalidades do sistema.
+                Cada página possui instruções específicas para facilitar o uso.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Tecnologias -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Tecnologias Utilizadas</h2>
+    </div>
+    <div style="padding: 1.5rem;">
+        <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
+            <span style="padding: 0.5rem 1rem; background: var(--bg-secondary); border-radius: 6px; color: var(--text-secondary);">
+                Django 5.0
+            </span>
+            <span style="padding: 0.5rem 1rem; background: var(--bg-secondary); border-radius: 6px; color: var(--text-secondary);">
+                Google Gemini AI
+            </span>
+            <span style="padding: 0.5rem 1rem; background: var(--bg-secondary); border-radius: 6px; color: var(--text-secondary);">
+                PostgreSQL + pgvector
+            </span>
+            <span style="padding: 0.5rem 1rem; background: var(--bg-secondary); border-radius: 6px; color: var(--text-secondary);">
+                Python 3.11
+            </span>
+            <span style="padding: 0.5rem 1rem; background: var(--bg-secondary); border-radius: 6px; color: var(--text-secondary);">
+                Docker
+            </span>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

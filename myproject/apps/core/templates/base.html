@@ -20,6 +20,9 @@
             <nav class="sidebar-nav">
                 <div class="nav-section">
                     <div class="nav-section-title">Principal</div>
+                    <a href="{% url 'home' %}" class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}">
+                        <span>Início</span>
+                    </a>
                     <a href="{% url 'upload_pdf' %}" class="nav-link {% if request.resolver_match.url_name == 'upload_pdf' %}active{% endif %}">
                         <span>Importar PDF</span>
                     </a>
