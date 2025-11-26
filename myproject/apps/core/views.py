@@ -4,6 +4,9 @@ from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q 
+from django.views.decorators.http import require_http_methods
+from django.shortcuts import render, redirect, get_object_or_404
 from ...agents.extraction.invoice_extractor import PDFExtractorAgent
 from ...agents.simple_rag import SimpleRAGAgent
 from ...agents.embedding.embedding_agent import EmbeddingAgent
@@ -12,7 +15,7 @@ from .models.person import Person
 from .models.classification import Classification
 from .models.account_transaction import AccountTransaction
 from .models.installment import Installment
-from .forms import PersonForm, ClassificationForm, TransactionForm
+from .forms import PersonForm, ClassificationForm, TransactionForm, TransactionEditForm
 from .services import process_extracted_invoice
 from decimal import Decimal
 from datetime import timedelta
@@ -232,14 +235,175 @@ def manual_registration(request):
     return render(request, 'registration/manual_registration.html', context)
 
 def view_registrations(request):
-    # Busca simples de todos os dados
-    people = Person.objects.all().order_by('-id')[:50]
-    classifications = Classification.objects.all().order_by('tipo', 'descricao')
-    transactions = AccountTransaction.objects.all().order_by('-data_emissao')[:50]
+    """Renderiza a página de visualização vazia inicialmente."""
+    return render(request, 'registration/view_registrations.html')
+
+def search_registrations(request):
+    """API para buscar dados dinamicamente via AJAX."""
+    search_type = request.GET.get('type')
+    query = request.GET.get('query', '').strip()
     
+    data = []
+    
+    try:
+        if search_type == 'person':
+            qs = Person.objects.filter(status='ativo')
+            if query:
+                # Busca por nome, documento ou fantasia
+                qs = qs.filter(
+                    Q(razao_social__icontains=query) | 
+                    Q(documento__icontains=query) |
+                    Q(fantasia__icontains=query)
+                )
+            
+            # Formata os dados para o frontend
+            for p in qs.order_by('-id')[:50]:
+                data.append({
+                    'id': p.id,
+                    'type': 'person',
+                    'col1': p.razao_social,
+                    'col2': p.get_tipo_display(), # Usa o display legível do choice
+                    'col3': p.documento,
+                    'col4': p.fantasia or '-'
+                })
+
+        elif search_type == 'classification':
+            qs = Classification.objects.filter(status='ativo')
+            if query:
+                qs = qs.filter(descricao__icontains=query)
+                
+            for c in qs.order_by('descricao')[:50]:
+                data.append({
+                    'id': c.id,
+                    'type': 'classification',
+                    'col1': c.descricao,
+                    'col2': c.tipo.capitalize(),
+                    'col3': '-', # Classificação tem menos colunas
+                    'col4': '-'
+                })
+
+        elif search_type == 'transaction':
+            qs = AccountTransaction.objects.filter(status='ativo').select_related('fornecedor_cliente')
+            if query:
+                qs = qs.filter(
+                    Q(numero_nota_fiscal__icontains=query) |
+                    Q(fornecedor_cliente__razao_social__icontains=query) |
+                    Q(descricao__icontains=query)
+                )
+            
+            for t in qs.order_by('-data_emissao')[:50]:
+                data.append({
+                    'id': t.id,
+                    'type': 'transaction',
+                    'col1': t.data_emissao.strftime('%d/%m/%Y'),
+                    'col2': t.numero_nota_fiscal,
+                    'col3': t.fornecedor_cliente.razao_social,
+                    'col4': f"R$ {t.valor_total}"
+                })
+
+        return JsonResponse({'success': True, 'data': data})
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@require_http_methods(["POST"])
+def delete_registration(request):
+    """API para realizar Delete (mudar status para inativo)."""
+    try:
+        data = json.loads(request.body)
+        item_type = data.get('type')
+        item_id = data.get('id')
+        
+        obj = None
+        if item_type == 'person':
+            obj = Person.objects.get(id=item_id)
+        elif item_type == 'classification':
+            obj = Classification.objects.get(id=item_id)
+        elif item_type == 'transaction':
+            obj = AccountTransaction.objects.get(id=item_id)
+        else:
+            return JsonResponse({'success': False, 'error': 'Tipo de item inválido.'})
+            
+        if hasattr(obj, 'desactivate'):
+            obj.desactivate() # Se o model tiver esse método helper
+        else:
+            obj.status = 'inativo'
+            obj.save()
+            
+        return JsonResponse({'success': True})
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+def edit_registration(request, item_type, item_id):
+    """View genérica para editar Pessoa, Classificação ou Transação."""
+    
+    if item_type == 'person':
+        model = Person
+        form_class = PersonForm
+        redirect_name = 'Pessoa'
+    elif item_type == 'classification':
+        model = Classification
+        form_class = ClassificationForm
+        redirect_name = 'Classificação'
+    elif item_type == 'transaction':
+        model = AccountTransaction
+        form_class = TransactionEditForm # Usa o form especial de edição
+        redirect_name = 'Conta'
+    else:
+        messages.error(request, 'Tipo de registro inválido.')
+        return redirect('view_cadastros')
+
+    # Busca o objeto ou 404
+    obj = get_object_or_404(model, id=item_id)
+
+    if request.method == 'POST':
+        form = form_class(request.POST, instance=obj)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    saved_obj = form.save()
+                    
+                    # Se for transação, atualiza o embedding do RAG
+                    if item_type == 'transaction':
+                        try:
+                            # Pega nomes das classificações
+                            classification_names = [c.descricao for c in saved_obj.classificacoes.all()]
+                            
+                            # Recria embedding
+                            mock_data = {
+                                'numero_nota_fiscal': saved_obj.numero_nota_fiscal,
+                                'valor_total': float(saved_obj.valor_total),
+                                'data_emissao': str(saved_obj.data_emissao),
+                                'data_vencimento': 'Mantido', # Não altera parcelas na edição simples
+                                'quantidade_parcelas': saved_obj.parcelas.count(),
+                                'descricao_produtos': [saved_obj.descricao]
+                            }
+                            
+                            embedding_agent = EmbeddingAgent()
+                            embedding_vector = embedding_agent.generate_transaction_embedding(
+                                data=mock_data,
+                                provider_name=saved_obj.fornecedor_cliente.razao_social,
+                                invoiced_name=saved_obj.faturado.razao_social,
+                                classifications=classification_names
+                            )
+                            
+                            if embedding_vector:
+                                saved_obj.descricao_embedding = embedding_vector
+                                saved_obj.save(update_fields=['descricao_embedding'])
+                        except Exception as e:
+                            print(f"Erro ao atualizar embedding na edição: {e}")
+
+                messages.success(request, f'{redirect_name} atualizado com sucesso!')
+                return redirect('view_cadastros')
+            except Exception as e:
+                messages.error(request, f'Erro ao salvar: {str(e)}')
+    else:
+        form = form_class(instance=obj)
+
     context = {
-        'people': people,
-        'classifications': classifications,
-        'transactions': transactions
+        'form': form,
+        'object_name': str(obj),
+        'type_label': redirect_name
     }
-    return render(request, 'registration/view_registrations.html', context)
+    return render(request, 'registration/edit_registration.html', context)

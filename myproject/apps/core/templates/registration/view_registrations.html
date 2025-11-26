@@ -5,6 +5,263 @@
 {% block content %}
 <div class="page-header">
     <h1 class="page-title">Visualizar Cadastros</h1>
-    <p class="page-subtitle">Em andamento</p>
+    <p class="page-subtitle">Consulte, edite ou desative registros do sistema.</p>
 </div>
+
+<div class="card">
+    <!-- Controles de Busca -->
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+        
+        <!-- Dropdown -->
+        <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Tipo de Registro</label>
+            <select id="search-type" class="form-select">
+                <option value="person">Pessoas (Fornecedores/Faturados)</option>
+                <option value="classification">Classificações</option>
+                <option value="transaction">Movimentações (Contas)</option>
+            </select>
+        </div>
+
+        <!-- Barra de Pesquisa e Botões de pesquisar -->
+        <div style="display: flex; gap: 1rem; align-items: flex-end;">
+            <div style="flex: 1;">
+                <input 
+                    type="text" 
+                    id="search-query" 
+                    class="form-input" 
+                    placeholder="Digite nome, documento ou descrição..."
+                >
+            </div>
+            <button id="btn-search" class="btn btn-primary">
+                🔍 Pesquisar
+            </button>
+            <button id="btn-all" class="btn btn-secondary">
+                Todos
+            </button>
+        </div>
+    </div>
+
+    <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 2rem 0;">
+
+    <!-- Tabela de Resultados -->
+    <div class="table-responsive">
+        <table class="table" style="width: 100%; border-collapse: collapse;">
+            <thead id="table-head" style="background-color: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
+                <!-- Cabeçalhos são injetados via JS -->
+            </thead>
+            <tbody id="table-body">
+                <!-- Dados são injetados via JS -->
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                        Selecione uma opção acima e clique em "Pesquisar" ou "Todos" para ver os dados.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Ações de Rodapé -->
+    <div style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
+        <button id="btn-edit" class="btn btn-secondary" disabled>
+            Editar Selecionado
+        </button>
+        <button id="btn-delete" class="btn btn-primary" style="background: #dc3545;" disabled>
+            Deletar Selecionado
+        </button>
+    </div>
+</div>
+
+<!-- Modal de Confirmação (Simples) -->
+<div id="delete-confirm" style="display:none; position: fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 2rem; border-radius: 8px; max-width: 400px; text-align: center;">
+        <h3>Confirmar Exclusão?</h3>
+        <p style="margin: 1rem 0;">O item será marcado como inativo e não aparecerá mais nas listas.</p>
+        <div style="display: flex; justify-content: center; gap: 1rem;">
+            <button onclick="closeModal()" class="btn btn-secondary">Cancelar</button>
+            <button id="confirm-delete-btn" class="btn btn-primary" style="background: #dc3545;">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Função auxiliar para pegar CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchType = document.getElementById('search-type');
+        const searchQuery = document.getElementById('search-query');
+        const btnSearch = document.getElementById('btn-search');
+        const btnAll = document.getElementById('btn-all');
+        const tableHead = document.getElementById('table-head');
+        const tableBody = document.getElementById('table-body');
+        
+        const btnEdit = document.getElementById('btn-edit');
+        const btnDelete = document.getElementById('btn-delete');
+        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+        const deleteModal = document.getElementById('delete-confirm');
+
+        let selectedId = null;
+        let selectedType = null;
+
+        // Configuração das colunas para cada tipo
+        const columnsConfig = {
+            'person': ['Nome / Razão Social', 'Tipo', 'Documento', 'Fantasia'],
+            'classification': ['Descrição', 'Tipo', '-', '-'],
+            'transaction': ['Data', 'Nº Nota', 'Fornecedor', 'Valor']
+        };
+
+        // Função para buscar dados
+        async function fetchData(query = '') {
+            const type = searchType.value;
+            
+            // Feedback visual de loading
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2rem;">Carregando...</td></tr>';
+            
+            // Atualiza cabeçalho
+            const headers = columnsConfig[type];
+            let headerHTML = '<tr><th style="padding: 1rem; width: 50px;">Sel.</th>';
+            headers.forEach(h => {
+                if (h !== '-') headerHTML += `<th style="padding: 1rem; text-align: left;">${h}</th>`;
+            });
+            headerHTML += '</tr>';
+            tableHead.innerHTML = headerHTML;
+
+            try {
+                const url = `{% url 'api_search' %}?type=${type}&query=${encodeURIComponent(query)}`;
+                const response = await fetch(url);
+                const result = await response.json();
+
+                if (result.success) {
+                    renderTable(result.data, type);
+                } else {
+                    tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: red;">Erro: ${result.error}</td></tr>`;
+                }
+            } catch (error) {
+                console.error(error);
+                tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: red;">Erro ao conectar com o servidor.</td></tr>';
+            }
+        }
+
+        // Função para renderizar tabela
+        function renderTable(data, type) {
+            if (data.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2rem;">Nenhum registro encontrado.</td></tr>';
+                return;
+            }
+
+            let html = '';
+            data.forEach(item => {
+                html += `
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                        <td style="padding: 1rem; text-align: center;">
+                            <input type="radio" name="selected_item" value="${item.id}" data-type="${type}" class="row-selector">
+                        </td>
+                        <td style="padding: 1rem;">${item.col1}</td>
+                        <td style="padding: 1rem;">${item.col2}</td>
+                        ${item.col3 !== '-' ? `<td style="padding: 1rem;">${item.col3}</td>` : ''}
+                        ${item.col4 !== '-' ? `<td style="padding: 1rem;">${item.col4}</td>` : ''}
+                    </tr>
+                `;
+            });
+            tableBody.innerHTML = html;
+
+            // Reatachar eventos aos radios
+            document.querySelectorAll('.row-selector').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    selectedId = this.value;
+                    selectedType = this.dataset.type;
+                    btnEdit.disabled = false;
+                    btnDelete.disabled = false;
+                });
+            });
+            
+            // Resetar seleção
+            selectedId = null;
+            btnEdit.disabled = true;
+            btnDelete.disabled = true;
+        }
+
+        // Event Listeners
+        btnSearch.addEventListener('click', () => fetchData(searchQuery.value));
+        
+        btnAll.addEventListener('click', () => {
+            searchQuery.value = '';
+            fetchData('');
+        });
+
+        // Deleção
+        btnDelete.addEventListener('click', () => {
+            if(selectedId) deleteModal.style.display = 'flex';
+        });
+
+        confirmDeleteBtn.addEventListener('click', async () => {
+            if (!selectedId) return;
+
+            try {
+                const response = await fetch('{% url "api_delete" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ id: selectedId, type: selectedType })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    closeModal();
+                    // Recarrega a lista atual
+                    if (searchQuery.value) {
+                        btnSearch.click();
+                    } else {
+                        btnAll.click();
+                    }
+                } else {
+                    alert('Erro ao deletar: ' + result.error);
+                }
+            } catch (error) {
+                alert('Erro de conexão.');
+            }
+        });
+
+        btnEdit.addEventListener('click', () => {
+            if(selectedId && selectedType) {
+                // Redireciona para a rota de edição criada no urls.py
+                // A URL segue o padrão: /editar/<tipo>/<id>/
+                window.location.href = `/editar/${selectedType}/${selectedId}/`;
+            }
+        });
+
+        // Limpar tabela ao mudar o tipo no dropdown
+        searchType.addEventListener('change', () => {
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Selecione uma opção acima e clique em "Pesquisar" ou "Todos" para ver os dados.</td></tr>';
+            tableHead.innerHTML = '';
+            selectedId = null;
+            btnEdit.disabled = true;
+            btnDelete.disabled = true;
+        });
+    });
+
+    // Função global para fechar modal (usada no onclick do HTML)
+    window.closeModal = function() {
+        document.getElementById('delete-confirm').style.display = 'none';
+    }
+</script>
 {% endblock %}

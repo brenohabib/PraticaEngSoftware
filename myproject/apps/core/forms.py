@@ -24,7 +24,6 @@ class ClassificationForm(forms.ModelForm):
         }
 
 class TransactionForm(forms.ModelForm):
-    # Campos existentes
     data_emissao = forms.DateField(
         widget=forms.DateInput(attrs={'class': 'form-input', 'type': 'date'}),
         label="Data de Emissão"
@@ -71,3 +70,15 @@ class TransactionForm(forms.ModelForm):
             'descricao': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3}),
             'valor_total': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01'}),
         }
+
+class TransactionEditForm(TransactionForm):
+    """
+    Formulário para editar transações existentes.
+    Remove os campos de criação de parcelas para evitar reprocessamento indesejado.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'quantidade_parcelas' in self.fields:
+            del self.fields['quantidade_parcelas']
+        if 'primeiro_vencimento' in self.fields:
+            del self.fields['primeiro_vencimento']

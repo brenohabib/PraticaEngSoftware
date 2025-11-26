@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar Registro - FinanceAI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Editar Registro</h1>
+    <p class="page-subtitle">Alterar dados de: <strong>{{ object_name }}</strong> ({{ type_label }})</p>
+</div>
+
+<div class="card" style="max-width: 800px; margin: 0 auto;">
+    <form method="post">
+        {% csrf_token %}
+        
+        {% for field in form %}
+            <div class="form-group">
+                <label class="form-label">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}
+                    <small style="color: var(--text-secondary);">{{ field.help_text }}</small>
+                {% endif %}
+                {% if field.errors %}
+                    <div style="color: #dc3545; font-size: 0.875rem; margin-top: 0.25rem;">
+                        {{ field.errors }}
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+
+        <div style="margin-top: 2rem; display: flex; justify-content: space-between;">
+            <a href="{% url 'view_cadastros' %}" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
